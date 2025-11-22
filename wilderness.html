@@ -127,7 +127,16 @@
           <option value="tropic">Climate: Tropical</option>
           <option value="desert">Climate: Arid</option>
         </select>
-        <button class="btn-primary" onclick="resetMap()" style="margin-top:10px">New Map</button>
+        <div class="row" style="margin-top: 10px;">
+           <button class="btn-primary" onclick="resetMap()">New Map</button>
+           <button class="btn-sec" onclick="exportMapData()" style="margin-top:0">Export Map</button>
+        </div>
+        <div style="margin-top:8px">
+           <label style="cursor:pointer; display:block; background:#334155; color:#e2e8f0; padding:8px; border-radius:6px; text-align:center; font-size:0.8rem">
+              Import Map (JSON)
+              <input type="file" id="importFile" accept=".json" style="display:none" onchange="importMapData(this)">
+           </label>
+        </div>
       </div>
     </div>
 
@@ -767,6 +776,71 @@
         </div>
       `;
       log.innerHTML = html + log.innerHTML;
+    }
+
+    // --- EXPORT / IMPORT ---
+    function exportMapData() {
+      const data = {
+        map: map,
+        currentPos: currentPos,
+        days: days,
+        movementPoints: movementPoints,
+        maxMovementPoints: maxMovementPoints,
+        partySize: document.getElementById('partySize').value,
+        rations: document.getElementById('rations').value,
+        startTerrain: document.getElementById('startTerrain').value,
+        climate: document.getElementById('climate').value
+      };
+      
+      const dataStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([dataStr], {type: "application/json"});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `wilderness_map_day${Math.floor(days)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function importMapData(input) {
+      const file = input.files[0];
+      if(!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+           const data = JSON.parse(e.target.result);
+           
+           if(data.map && data.currentPos) {
+              map = data.map;
+              currentPos = data.currentPos;
+              days = data.days || 0;
+              movementPoints = data.movementPoints || 12;
+              maxMovementPoints = data.maxMovementPoints || 12;
+              
+              if(data.partySize) document.getElementById('partySize').value = data.partySize;
+              if(data.rations) document.getElementById('rations').value = data.rations;
+              if(data.startTerrain) document.getElementById('startTerrain').value = data.startTerrain;
+              if(data.climate) document.getElementById('climate').value = data.climate;
+              
+              document.getElementById('dayCount').innerText = `${days} days, ${movementPoints}/${maxMovementPoints} MP`;
+              
+              recenterMap(); // Redraws and centers
+              updateInfo();
+              generateWeather();
+              
+              // Clear log on import to avoid confusion
+              document.getElementById('log').innerHTML = '<div style="color:#64748b; text-align:center; padding-top:20px">Map loaded successfully.</div>';
+           } else {
+              alert("Invalid map file format.");
+           }
+        } catch(err) {
+           alert("Error reading file: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+      input.value = ''; // Reset so same file can be selected again
     }
 
     // Init

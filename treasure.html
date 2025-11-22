@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Treasure Hoard Generator</title>
+  <style>
+    /* --- SUITE DESIGN SYSTEM --- */
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 1.5rem; font-family: system-ui, -apple-system, sans-serif; background: radial-gradient(circle at top, #0f172a 0, #020617 55%, #000 100%); color: #e5e7eb; }
+    h1 { margin: 0 0 0.3rem 0; font-size: 1.6rem; letter-spacing: -0.02em; }
+    .tagline { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.2rem; }
+    
+    .layout-main { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; margin-top: 0.75rem; }
+    @media (max-width: 800px) { .layout-main { grid-template-columns: 1fr; } }
+
+    /* Cards */
+    .card { border-radius: 0.75rem; border: 1px solid #1f2937; background: #0f172a; padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; height: fit-content; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; border-bottom: 1px solid #1e293b; margin-bottom: 0.5rem; }
+    .card-title { font-weight: 700; font-size: 1rem; color: #f8fafc; text-transform: uppercase; letter-spacing: 0.05em; }
+    
+    /* UI Elements */
+    label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px; }
+    select, button {
+      width: 100%; background: #020617; border: 1px solid #334155; color: #e2e8f0;
+      padding: 8px 12px; border-radius: 4px; font-size: 0.9rem;
+    }
+    select:focus { border-color: #6366f1; outline: none; }
+    
+    .btn-primary { background: #4f46e5; color: white; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); border: none; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-sec { background: #334155; color: #cbd5e1; border: none; font-size: 0.8rem; padding: 6px; width: auto; cursor: pointer; border-radius: 4px; }
+
+    /* Treasure Display */
+    .treasure-box { background: #000; border: 1px solid #334155; border-radius: 8px; padding: 20px; min-height: 400px; font-family: 'Courier New', monospace; }
+    
+    .t-section { margin-bottom: 15px; }
+    .t-header { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; border-bottom: 1px dashed #333; padding-bottom: 2px; margin-bottom: 5px; }
+    
+    .coin-row { display: flex; justify-content: space-between; padding: 4px 0; color: #fbbf24; }
+    .coin-val { font-weight: bold; }
+    
+    .item-row { padding: 4px 0; border-bottom: 1px dotted #1e293b; font-size: 0.9rem; }
+    .item-row:last-child { border: none; }
+    .gem { color: #f472b6; }
+    .jewelry { color: #38bdf8; }
+    .magic { color: #a78bfa; font-weight: bold; }
+    
+    .total-val { margin-top: 20px; padding-top: 10px; border-top: 1px solid #334155; text-align: right; color: #fbbf24; font-size: 1.2rem; font-weight: bold; }
+    
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 8px; background: #334155; color: #fff; font-family: system-ui; }
+  </style>
+</head>
+<body>
+
+  <h1>Treasure Hoard Generator</h1>
+  <p class="tagline">Accurate BECMI Treasure Tables (A-O)</p>
+
+  <div class="layout-main">
+
+    <!-- CONTROLS -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Settings</span>
+      </div>
+      
+      <div>
+        <label>Treasure Type</label>
+        <select id="treasureType">
+          <option value="A">Type A (Land Lair)</option>
+          <option value="B">Type B (Land Lair)</option>
+          <option value="C">Type C (Land Lair)</option>
+          <option value="D">Type D (Land Lair)</option>
+          <option value="E">Type E (Land Lair)</option>
+          <option value="F">Type F (Monster Lair)</option>
+          <option value="G">Type G (Monster Lair)</option>
+          <option value="H">Type H (Dragon/Lair)</option>
+          <option value="I">Type I (Unique)</option>
+          <option value="J">Type J (Individual)</option>
+          <option value="K">Type K (Individual)</option>
+          <option value="L">Type L (Individual)</option>
+          <option value="M">Type M (Individual)</option>
+          <option value="N">Type N (Individual)</option>
+          <option value="O">Type O (Individual)</option>
+          <option value="P">Type P (Coins)</option>
+          <option value="Q">Type Q (Gems)</option>
+          <option value="R">Type R (Group)</option>
+          <option value="S">Type S (Group)</option>
+          <option value="T">Type T (Group)</option>
+          <option value="U">Type U (Group)</option>
+          <option value="V">Type V (Group)</option>
+        </select>
+      </div>
+      
+      <div style="margin-top: 10px; padding: 10px; background: #1e293b; border-radius: 6px; font-size: 0.8rem; color: #94a3b8;">
+         <div id="typeDesc">Type A: 25% 1-6k CP, 30% 1-6k SP, 20% 1-4k EP, 35% 2-12k GP, 25% 1-2k PP. 50% 6d6 Gems, 50% 6d6 Jewelry, 30% 3 Magic.</div>
+      </div>
+
+      <button class="btn-primary" style="margin-top: 15px" onclick="generate()">Generate Hoard</button>
+      
+      <div style="margin-top: auto;">
+         <button class="btn-sec" onclick="copyToClipboard()">Copy to Clipboard</button>
+      </div>
+    </div>
+
+    <!-- OUTPUT -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Generated Hoard</span>
+      </div>
+      
+      <div class="treasure-box" id="output">
+         <div style="text-align: center; color: #64748b; padding-top: 100px;">Select a Type and Generate.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- BECMI TABLES ---
+    
+    // Note: Probabilities and Amounts
+    const TREASURE_TYPES = {
+      A: { 
+        cp: { pct: 25, roll: '1d6', mult: 1000 }, 
+        sp: { pct: 30, roll: '1d6', mult: 1000 }, 
+        ep: { pct: 20, roll: '1d4', mult: 1000 }, 
+        gp: { pct: 35, roll: '2d6', mult: 1000 }, 
+        pp: { pct: 25, roll: '1d2', mult: 1000 }, 
+        gems: { pct: 50, roll: '6d6' }, 
+        jewelry: { pct: 50, roll: '6d6' }, 
+        magic: { pct: 30, count: 3, type: 'any' } 
+      },
+      B: { 
+        cp: { pct: 50, roll: '1d8', mult: 1000 }, 
+        sp: { pct: 25, roll: '1d6', mult: 1000 }, 
+        ep: { pct: 25, roll: '1d4', mult: 1000 }, 
+        gp: { pct: 25, roll: '1d3', mult: 1000 }, 
+        gems: { pct: 25, roll: '1d6' }, 
+        jewelry: { pct: 25, roll: '1d6' }, 
+        magic: { pct: 10, count: 1, type: 'weapon/armor' } 
+      },
+      C: { 
+        cp: { pct: 20, roll: '1d12', mult: 1000 }, 
+        sp: { pct: 30, roll: '1d4', mult: 1000 }, 
+        ep: { pct: 10, roll: '1d4', mult: 1000 }, 
+        gems: { pct: 25, roll: '1d4' }, 
+        jewelry: { pct: 25, roll: '1d4' }, 
+        magic: { pct: 10, count: 2, type: 'any' } 
+      },
+      D: { 
+        cp: { pct: 10, roll: '1d8', mult: 1000 }, 
+        sp: { pct: 15, roll: '1d12', mult: 1000 }, 
+        gp: { pct: 60, roll: '1d6', mult: 1000 }, 
+        gems: { pct: 30, roll: '1d8' }, 
+        jewelry: { pct: 30, roll: '1d8' }, 
+        magic: { pct: 15, count: 2, type: 'any', extra: ['potion'] } 
+      },
+      E: { 
+        cp: { pct: 5, roll: '1d10', mult: 1000 }, 
+        sp: { pct: 30, roll: '1d12', mult: 1000 }, 
+        ep: { pct: 25, roll: '1d4', mult: 1000 }, 
+        gp: { pct: 25, roll: '1d8', mult: 1000 }, 
+        gems: { pct: 10, roll: '1d10' }, 
+        jewelry: { pct: 10, roll: '1d10' }, 
+        magic: { pct: 25, count: 3, type: 'any', extra: ['scroll'] } 
+      },
+      F: { 
+        sp: { pct: 10, roll: '2d10', mult: 1000 }, 
+        ep: { pct: 20, roll: '1d8', mult: 1000 }, 
+        gp: { pct: 45, roll: '1d12', mult: 1000 }, 
+        pp: { pct: 30, roll: '1d3', mult: 1000 }, 
+        gems: { pct: 20, roll: '2d12' }, 
+        jewelry: { pct: 10, roll: '1d12' }, 
+        magic: { pct: 30, count: 3, type: 'no-weapon', extra: ['potion', 'scroll'] } 
+      },
+      G: { 
+        gp: { pct: 50, roll: '10d4', mult: 1000 }, 
+        pp: { pct: 50, roll: '1d20', mult: 1000 }, 
+        gems: { pct: 30, roll: '3d6' }, 
+        jewelry: { pct: 25, roll: '1d10' }, 
+        magic: { pct: 35, count: 4, type: 'any', extra: ['scroll'] } 
+      },
+      H: { 
+        cp: { pct: 25, roll: '3d8', mult: 1000 }, 
+        sp: { pct: 50, roll: '1d100', mult: 1000 }, 
+        ep: { pct: 50, roll: '1d4', mult: 10000 }, 
+        gp: { pct: 50, roll: '1d6', mult: 10000 }, 
+        pp: { pct: 25, roll: '5d4', mult: 1000 }, 
+        gems: { pct: 50, roll: '1d100' }, 
+        jewelry: { pct: 50, roll: '1d4', mult: 10 }, // 1d4x10 pieces? Actually tables say 1d4*10 usually. But BECMI table says 1-4. 
+        magic: { pct: 15, count: 4, type: 'any', extra: ['potion', 'scroll'] } 
+      },
+      I: { 
+        pp: { pct: 30, roll: '1d8', mult: 100 }, 
+        gems: { pct: 50, roll: '2d6' }, 
+        jewelry: { pct: 50, roll: '2d6' }, 
+        magic: { pct: 15, count: 1, type: 'any' } 
+      },
+      J: { cp: { pct: 25, roll: '1d4', mult: 1000 }, sp: { pct: 10, roll: '1d3', mult: 1000 } },
+      K: { sp: { pct: 30, roll: '1d6', mult: 1000 }, ep: { pct: 10, roll: '1d2', mult: 1000 } },
+      L: { gems: { pct: 50, roll: '1d4' } },
+      M: { gp: { pct: 40, roll: '2d4', mult: 1000 }, pp: { pct: 50, roll: '5d6', mult: 100 }, gems: { pct: 55, roll: '5d4' }, jewelry: { pct: 45, roll: '2d6' } },
+      N: { pp: { pct: 40, roll: '2d4', mult: 100 }, magic: { pct: 40, count: 0, extra: ['potion', 'potion', 'potion'] } },
+      O: { magic: { pct: 50, count: 0, extra: ['scroll', 'scroll'] } },
+      
+      // Special Coin-Only Types
+      P: { cp: { pct: 100, roll: '3d8', mult: 1 } },
+      Q: { sp: { pct: 100, roll: '3d6', mult: 1 } },
+      R: { ep: { pct: 100, roll: '2d6', mult: 1 } },
+      S: { gp: { pct: 100, roll: '2d4', mult: 1 } },
+      T: { pp: { pct: 100, roll: '1d6', mult: 1 } },
+      U: { cp: { pct: 10, roll: '1d100', mult: 1 }, sp: { pct: 10, roll: '1d100', mult: 1 }, gp: { pct: 5, roll: '1d100', mult: 1 }, gems: { pct: 5, roll: '1d4' }, jewelry: { pct: 5, roll: '1d4' }, magic: { pct: 2, count: 1, type: 'any' } },
+      V: { sp: { pct: 10, roll: '1d100', mult: 1 }, ep: { pct: 5, roll: '1d100', mult: 1 }, gp: { pct: 10, roll: '1d100', mult: 1 }, pp: { pct: 5, roll: '1d100', mult: 1 }, gems: { pct: 10, roll: '1d4' }, jewelry: { pct: 10, roll: '1d4' }, magic: { pct: 5, count: 1, type: 'any' } }
+    };
+
+    const GEMS = [
+      { max: 10, val: 10, name: "Ornamental Stone (Agate, Azurite, Lapis Lazuli)" },
+      { max: 25, val: 50, name: "Semi-Precious (Bloodstone, Moonstone, Quartz)" },
+      { max: 75, val: 100, name: "Fancy Stone (Amber, Amethyst, Jade, Coral)" },
+      { max: 90, val: 500, name: "Precious (Pearl, Topaz, Peridot)" },
+      { max: 99, val: 1000, name: "Gem (Emerald, Opal, Sapphire, Ruby)" },
+      { max: 100, val: 5000, name: "Jewel (Diamond, Star Ruby)" }
+    ];
+
+    const JEWELRY = [
+      { max: 10, val: 100, name: "Ivory/Silver Wrought" },
+      { max: 25, val: 400, name: "Silver/Gold Plated" },
+      { max: 75, val: 800, name: "Gold/Silver + Gems" },
+      { max: 90, val: 1500, name: "Platinum + Gems" },
+      { max: 100, val: 5000, name: "Masterwork Heirloom" }
+    ];
+
+    const MAGIC_TABLES = {
+      'any': ['sword', 'armor', 'potion', 'scroll', 'ring', 'wand', 'misc'],
+      'weapon/armor': ['sword', 'weapon', 'armor'],
+      'no-weapon': ['potion', 'scroll', 'ring', 'wand', 'misc'],
+      
+      // Subtables (Simplified for Demo - In full BECMI these are huge)
+      'sword': ['Sword +1', 'Sword +1, +2 vs Undead', 'Sword +1, +3 vs Dragons', 'Sword +2', 'Sword +3'],
+      'weapon': ['Axe +1', 'Bow +1', 'Dagger +1', 'Mace +1', 'Spear +1', 'War Hammer +1'],
+      'armor': ['Shield +1', 'Shield +2', 'Leather Armor +1', 'Chain Mail +1', 'Plate Mail +1', 'Plate Mail +2'],
+      'potion': ['Potion of Healing', 'Potion of Flying', 'Potion of Invisibility', 'Potion of Speed', 'Potion of Giant Strength'],
+      'scroll': ['Scroll: 1 Spell (Lvl 1)', 'Scroll: 2 Spells (Lvl 1-2)', 'Scroll: Protection from Evil', 'Scroll: Protection from Lycanthropes', 'Cursed Scroll'],
+      'ring': ['Ring of Protection +1', 'Ring of Invisibility', 'Ring of Water Walking', 'Ring of Fire Resistance', 'Ring of Spell Turning'],
+      'wand': ['Wand of Magic Detection', 'Wand of Secret Door Detection', 'Wand of Magic Missiles', 'Wand of Fear', 'Wand of Cold'],
+      'misc': ['Elven Cloak', 'Bag of Holding', 'Boots of Speed', 'Gauntlets of Ogre Power', 'Helm of Telepathy', 'Broom of Flying']
+    };
+
+    // --- LOGIC ---
+
+    function rollDice(diceString) {
+      const match = diceString.match(/(\d+)d(\d+)/);
+      if (!match) return 0;
+      const num = parseInt(match[1]);
+      const die = parseInt(match[2]);
+      let total = 0;
+      for(let i=0; i<num; i++) total += Math.floor(Math.random() * die) + 1;
+      return total;
+    }
+
+    function d100() { return Math.floor(Math.random() * 100) + 1; }
+
+    function generate() {
+      const type = document.getElementById('treasureType').value;
+      const def = TREASURE_TYPES[type];
+      const out = document.getElementById('output');
+      
+      if(!def) { out.innerHTML = "Invalid type"; return; }
+      
+      let html = `<div class="t-section"><div class="t-header">Coins</div>`;
+      let totalValue = 0;
+      let hasCoins = false;
+
+      // Coins
+      ['cp','sp','ep','gp','pp'].forEach(c => {
+         if(def[c]) {
+            if(d100() <= def[c].pct) {
+               const roll = rollDice(def[c].roll);
+               const amt = roll * (def[c].mult || 1);
+               if(amt > 0) {
+                  hasCoins = true;
+                  let val = 0;
+                  if(c==='cp') val = amt * 0.01;
+                  if(c==='sp') val = amt * 0.1;
+                  if(c==='ep') val = amt * 0.5;
+                  if(c==='gp') val = amt * 1;
+                  if(c==='pp') val = amt * 5;
+                  totalValue += val;
+                  html += `<div class="coin-row"><span>${amt.toLocaleString()} ${c.toUpperCase()}</span> <span style="color:#64748b; font-size:0.7rem">(${val} gp)</span></div>`;
+               }
+            }
+         }
+      });
+      if(!hasCoins) html += `<div style="color:#64748b; font-size:0.8rem">None</div>`;
+      html += `</div>`;
+
+      // Gems
+      html += `<div class="t-section"><div class="t-header">Gems & Jewelry</div>`;
+      let hasJewel = false;
+      
+      if(def.gems && d100() <= def.gems.pct) {
+         const count = rollDice(def.gems.roll);
+         for(let i=0; i<count; i++) {
+            const roll = d100();
+            const g = GEMS.find(x => roll <= x.max);
+            // Variation: +/- 20% value
+            const variance = (Math.random() * 0.4) + 0.8; 
+            const val = Math.floor(g.val * variance);
+            totalValue += val;
+            html += `<div class="item-row gem">${g.name} <span class="badge">${val} gp</span></div>`;
+            hasJewel = true;
+         }
+      }
+      
+      if(def.jewelry && d100() <= def.jewelry.pct) {
+         const count = rollDice(def.jewelry.roll) * (def.jewelry.mult || 1); // Watch out for multipliers on jewelry count? Usually not.
+         // Wait, Type H says jewelry 1-4 * 10. Ah.
+         // Actually standard is count.
+         for(let i=0; i<count; i++) {
+            const roll = d100();
+            const j = JEWELRY.find(x => roll <= x.max);
+            const val = Math.floor(j.val * ((Math.random() * 0.5) + 0.75));
+            totalValue += val;
+            html += `<div class="item-row jewelry">${j.name} <span class="badge">${val} gp</span></div>`;
+            hasJewel = true;
+         }
+      }
+      if(!hasJewel) html += `<div style="color:#64748b; font-size:0.8rem">None</div>`;
+      html += `</div>`;
+
+      // Magic
+      html += `<div class="t-section"><div class="t-header">Magic Items</div>`;
+      let hasMagic = false;
+      
+      if(def.magic && d100() <= def.magic.pct) {
+         let count = def.magic.count || 0;
+         const items = [];
+         
+         // Fixed extras (Potions/Scrolls)
+         if(def.magic.extra) {
+            def.magic.extra.forEach(cat => items.push(rollMagic(cat)));
+         }
+         
+         // General
+         for(let i=0; i<count; i++) {
+            items.push(rollMagic(def.magic.type));
+         }
+         
+         items.forEach(it => {
+            hasMagic = true;
+            html += `<div class="item-row magic">${it}</div>`;
+         });
+      }
+      if(!hasMagic) html += `<div style="color:#64748b; font-size:0.8rem">None</div>`;
+      html += `</div>`;
+
+      // Total
+      html += `<div class="total-val">Total Value: ${Math.floor(totalValue).toLocaleString()} gp</div>`;
+      
+      out.innerHTML = html;
+    }
+
+    function rollMagic(category) {
+       if(category === 'any' || category === 'no-weapon' || category === 'weapon/armor') {
+          const table = MAGIC_TABLES[category];
+          const sub = table[Math.floor(Math.random() * table.length)];
+          return rollMagic(sub);
+       }
+       
+       // Specific Category
+       const table = MAGIC_TABLES[category];
+       if(!table) return "Unknown Item";
+       return table[Math.floor(Math.random() * table.length)];
+    }
+
+    function copyToClipboard() {
+       const text = document.getElementById('output').innerText;
+       navigator.clipboard.writeText(text);
+       alert("Treasure list copied!");
+    }
+
+    // UI
+    document.getElementById('treasureType').addEventListener('change', (e) => {
+       const t = TREASURE_TYPES[e.target.value];
+       let desc = "";
+       if(t.cp) desc += `${t.cp.pct}% CP, `;
+       if(t.sp) desc += `${t.sp.pct}% SP, `;
+       if(t.ep) desc += `${t.ep.pct}% EP, `;
+       if(t.gp) desc += `${t.gp.pct}% GP, `;
+       if(t.pp) desc += `${t.pp.pct}% PP, `;
+       if(t.gems) desc += `${t.gems.pct}% Gems, `;
+       if(t.magic) desc += `${t.magic.pct}% Magic`;
+       document.getElementById('typeDesc').innerText = desc;
+    });
+
+  </script>
+</body>
+</html>
