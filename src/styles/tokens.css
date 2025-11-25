@@ -1,0 +1,30 @@
+:root {
+  --bg-primary: #1e1e2e;
+  --bg-panel: #2a2a40;
+
+  --text-primary: #e0e0e0;
+  --text-muted: #a6adc8;
+
+  --panel-border: #313244;
+  --panel-shadow: 0 1px 0 rgba(0, 0, 0, 0.25), 0 0 0 1px var(--panel-border);
+
+  --accent-a: #89dceb;
+  --accent-b: #a6e3a1;
+  --accent-c: #f38ba8;
+  --accent-d: #94e2d5;
+  --accent-e: #f9e2af;
+
+  --panel-gap: 0.75rem;
+  --panel-padding: 0.75rem;
+  --panel-radius: 0.5rem;
+
+  --scrollbox-pad: 0.75rem;
+  --scrollbox-pad-top: 0.25rem;
+  --scrollbox-pad-x: 0.5rem;
+
+  --sidebar-width: 280px;
+  --transition-fast: 150ms;
+
+  color-scheme: dark;
+}
+

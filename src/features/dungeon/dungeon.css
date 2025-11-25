@@ -1,0 +1,26 @@
+.dungeon-shell .panel {
+  background: linear-gradient(180deg, #101223 0%, #0b0d18 100%);
+  border: 1px solid rgba(148, 226, 213, 0.08);
+  box-shadow: 0 18px 35px rgba(0, 0, 0, 0.45);
+}
+
+.dungeon-shell .panel-heading {
+  color: var(--accent-d);
+  letter-spacing: 0.15em;
+}
+
+.dungeon-shell .stat {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dungeon-shell .button {
+  border: 1px solid rgba(137, 220, 235, 0.3);
+  background: linear-gradient(135deg, rgba(137, 220, 235, 0.12), rgba(137, 220, 235, 0.05));
+}
+
+.dungeon-shell .scrollbox {
+  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.6), rgba(2, 6, 23, 0.9));
+  border-radius: var(--panel-radius);
+}
+

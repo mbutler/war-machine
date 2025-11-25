@@ -1,0 +1,14 @@
+{
+  "name": "war-machine",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch build ./src/main.ts --target=browser --outdir=public/build",
+    "build": "bun build ./src/main.ts --target=browser --outdir=public/build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

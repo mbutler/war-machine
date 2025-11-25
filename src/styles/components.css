@@ -1,0 +1,145 @@
+.button {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--panel-border);
+  background: rgba(137, 220, 235, 0.08);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.button:hover {
+  background: rgba(137, 220, 235, 0.2);
+  border-color: var(--accent-a);
+}
+
+.button.danger {
+  background: rgba(243, 139, 168, 0.1);
+  border-color: rgba(243, 139, 168, 0.4);
+}
+
+.button.danger:hover {
+  background: rgba(243, 139, 168, 0.25);
+}
+
+.input {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--panel-border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-a);
+}
+
+.label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+  display: block;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 0.35rem;
+}
+
+.stat {
+  padding: 0.4rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--panel-border);
+  text-align: left;
+}
+
+.stat-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}
+
+.stat-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 0.1rem;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.timestamp {
+  font-size: 10px;
+  opacity: 0.4;
+  font-style: italic;
+}
+
+.toast-stack {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+.toast {
+  position: relative;
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--bg-panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.4rem;
+  padding: 0.75rem 2.25rem 0.75rem 0.75rem;
+  box-shadow: var(--panel-shadow);
+  pointer-events: auto;
+}
+
+.toast[data-variant="success"] {
+  border-color: rgba(137, 235, 182, 0.7);
+}
+
+.toast[data-variant="warning"] {
+  border-color: rgba(252, 211, 77, 0.5);
+}
+
+.toast[data-variant="danger"] {
+  border-color: rgba(243, 139, 168, 0.7);
+}
+
+.toast-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.toast-message {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.toast-dismiss {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.25rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+
