@@ -1,0 +1,141 @@
+.treasure-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 960px) {
+  .treasure-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.treasure-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.treasure-card {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 1rem;
+  background: var(--bg-primary);
+  box-shadow: var(--panel-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.treasure-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.treasure-type-desc {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.treasure-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (min-width: 520px) {
+  .treasure-actions {
+    flex-direction: row;
+  }
+}
+
+.treasure-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.treasure-meta {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.75rem;
+  background: rgba(137, 220, 235, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.treasure-meta-title {
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.treasure-meta-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.treasure-meta-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.treasure-section {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.75rem;
+}
+
+.treasure-section-title {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.treasure-list {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.treasure-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.treasure-history-item {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.treasure-history-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.treasure-history-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.treasure-history-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.treasure-history-actions .button {
+  flex: 1;
+}
+

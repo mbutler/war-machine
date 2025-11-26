@@ -1,5 +1,6 @@
-import { createPanel } from "../../layout/panels";
 import { registerRoute } from "../../router";
+import { renderTreasurePanel } from "./view";
+import "./treasure.css";
 
 registerRoute({
   id: "treasure",
@@ -8,12 +9,7 @@ registerRoute({
   section: "Logistics",
   order: 3,
   mount(target) {
-    const { element, body } = createPanel("Treasure Operations");
-    const paragraph = document.createElement("p");
-    paragraph.textContent =
-      "Type A–O hoards, gems, jewelry, and magic item rolls will be surfaced here.";
-    body.appendChild(paragraph);
-    target.appendChild(element);
+    return renderTreasurePanel(target);
   },
 });
 

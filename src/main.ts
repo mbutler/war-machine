@@ -73,10 +73,11 @@ const shell = renderAppShell(root, {
 
 onCalendarEvent((event) => {
   if (event.type === "timers-expired") {
-    const label = event.timers.length > 1 ? "Timers expired" : "Timer expired";
+    const names = event.trackers.map((tracker) => tracker.name);
+    const label = names.length > 1 ? "Timers expired" : "Timer expired";
     showNotification({
       title: label,
-      message: event.timers.join(", "),
+      message: names.join(", "),
       variant: "warning",
     });
   }

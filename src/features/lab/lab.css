@@ -1,0 +1,240 @@
+.lab-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr minmax(260px, 320px);
+  gap: 1.25rem;
+}
+
+@media (max-width: 1100px) {
+  .lab-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lab-grid .lab-column:last-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .lab-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lab-grid .lab-column:last-child {
+    grid-column: span 1;
+  }
+}
+
+.lab-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.lab-card {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 1rem;
+  background: var(--bg-primary);
+  box-shadow: var(--panel-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lab-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.lab-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.lab-formula-field {
+  align-items: flex-start;
+}
+
+.lab-checkbox {
+  width: auto;
+}
+
+.lab-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lab-actions .button {
+  flex: 1;
+}
+
+.lab-mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(137, 220, 235, 0.08);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.35rem;
+}
+
+.lab-radio {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.lab-summary {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: rgba(137, 220, 235, 0.04);
+}
+
+.lab-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.lab-stat {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.6rem;
+}
+
+.lab-stat-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.lab-stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.lab-chance {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.lab-chance-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.lab-chance-value {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.3rem 0;
+}
+
+.lab-chance-value[data-state="fail"] {
+  color: rgba(243, 139, 168, 0.9);
+}
+
+.lab-chance-value[data-state="ok"] {
+  color: rgba(137, 235, 182, 0.9);
+}
+
+.lab-chance-breakdown {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.lab-chance-warning {
+  font-size: 0.75rem;
+  color: rgba(243, 139, 168, 0.85);
+  margin-top: 0.35rem;
+}
+
+.lab-library-info {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.lab-active-notice {
+  font-size: 0.8rem;
+  color: rgba(243, 211, 77, 0.85);
+}
+
+.lab-error {
+  font-size: 0.8rem;
+  color: rgba(243, 139, 168, 0.85);
+  min-height: 1em;
+}
+
+.lab-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lab-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.lab-log-entry {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lab-log-entry[data-outcome="success"] {
+  border-color: rgba(137, 235, 182, 0.4);
+}
+
+.lab-log-entry[data-outcome="fail"] {
+  border-color: rgba(243, 139, 168, 0.4);
+}
+
+.lab-log-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: space-between;
+}
+
+.lab-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+}
+
+.lab-log-entry-time {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.lab-log-entry-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+

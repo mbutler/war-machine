@@ -3,12 +3,13 @@ import type {
   CalendarLogEntry,
   CalendarState,
   CalendarTracker,
+  CalendarTrackerKind,
 } from "../../state/schema";
 import { getState, subscribe, updateState } from "../../state/store";
 import { createId } from "../../utils/id";
 
 export type CalendarListener = (state: CalendarState) => void;
-export type CalendarEventPayload = { type: "timers-expired"; timers: string[] };
+export type CalendarEventPayload = { type: "timers-expired"; trackers: CalendarTracker[] };
 
 const calendarEventListeners = new Set<(event: CalendarEventPayload) => void>();
 
@@ -86,12 +87,12 @@ function emitCalendarEvent(event: CalendarEventPayload) {
   calendarEventListeners.forEach((listener) => listener(event));
 }
 
-export function advanceCalendar(unit: CalendarAdvanceUnit, amount = 1): string[] {
+export function advanceCalendar(unit: CalendarAdvanceUnit, amount = 1): CalendarTracker[] {
   if (amount <= 0) {
     return [];
   }
 
-  let expired: string[] = [];
+  let expired: CalendarTracker[] = [];
 
   updateState((state) => {
     const calendar = state.calendar;
@@ -109,7 +110,7 @@ export function advanceCalendar(unit: CalendarAdvanceUnit, amount = 1): string[]
   });
 
   if (expired.length) {
-    emitCalendarEvent({ type: "timers-expired", timers: expired });
+    emitCalendarEvent({ type: "timers-expired", trackers: expired });
   }
 
   return expired;
@@ -124,7 +125,12 @@ export function manualSetCalendar(payload: { year: number; month: number; day: n
   });
 }
 
-export function addCalendarTracker(name: string, duration: number, unit: CalendarTrackerUnit) {
+export function addCalendarTracker(
+  name: string,
+  duration: number,
+  unit: CalendarTrackerUnit,
+  options: { kind?: CalendarTrackerKind; blocking?: boolean } = {},
+): CalendarTracker | null {
   const trimmed = name.trim();
   if (!trimmed || duration <= 0) {
     return;
@@ -135,16 +141,27 @@ export function addCalendarTracker(name: string, duration: number, unit: Calenda
     return;
   }
 
+  let newTracker: CalendarTracker | null = null;
   updateState((state) => {
     const tracker: CalendarTracker = {
       id: createId(),
       name: trimmed,
       initialMinutes: minutes,
       remainingMinutes: minutes,
+      kind: options.kind ?? "other",
+      blocking: options.blocking ?? false,
+      startedAt: Date.now(),
     };
     state.calendar.trackers.push(tracker);
-    addCalendarLog(state.calendar, "Tracker added", `${tracker.name} (${formatDuration(minutes)})`);
+    addCalendarLog(
+      state.calendar,
+      "Tracker added",
+      `${tracker.name} (${formatDuration(minutes)})${tracker.blocking ? " · Blocking" : ""}`,
+    );
+    newTracker = tracker;
   });
+
+  return newTracker;
 }
 
 export function removeCalendarTracker(id: string) {
@@ -360,22 +377,27 @@ function convertTrackerDuration(duration: number, unit: CalendarTrackerUnit): nu
   return (MINUTES_PER_TRACKER_UNIT[unit] ?? 0) * duration;
 }
 
-function decrementTrackers(state: CalendarState, minutes: number): string[] {
+function decrementTrackers(state: CalendarState, minutes: number): CalendarTracker[] {
   if (minutes <= 0) return [];
-  const expired: string[] = [];
+  const expired: CalendarTracker[] = [];
   const trackers = Array.isArray(state.trackers) ? state.trackers : [];
+
   trackers.forEach((tracker) => {
-    if (tracker.remainingMinutes <= 0) return;
+    if (tracker.remainingMinutes <= 0) {
+      return;
+    }
     tracker.remainingMinutes = Math.max(0, tracker.remainingMinutes - minutes);
     if (tracker.remainingMinutes === 0) {
-      expired.push(tracker.name);
+      expired.push({ ...tracker });
     }
   });
 
-  state.trackers = trackers;
-
   if (expired.length) {
-    addCalendarLog(state, "Timers expired", expired.join(", "));
+    const expiredIds = new Set(expired.map((tracker) => tracker.id));
+    state.trackers = trackers.filter((tracker) => !expiredIds.has(tracker.id));
+    addCalendarLog(state, "Timers expired", expired.map((t) => t.name).join(", "));
+  } else {
+    state.trackers = trackers;
   }
 
   return expired;

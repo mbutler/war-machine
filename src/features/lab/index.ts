@@ -1,5 +1,6 @@
-import { createPanel } from "../../layout/panels";
 import { registerRoute } from "../../router";
+import { renderLabPanel } from "./view";
+import "./lab.css";
 
 registerRoute({
   id: "lab",
@@ -8,12 +9,7 @@ registerRoute({
   section: "Arcana",
   order: 1,
   mount(target) {
-    const { element, body } = createPanel("Laboratory");
-    const paragraph = document.createElement("p");
-    paragraph.textContent =
-      "Spell research, potion brewing, and enchantment projects will appear here.";
-    body.appendChild(paragraph);
-    target.appendChild(element);
+    return renderLabPanel(target);
   },
 });
 

@@ -241,11 +241,24 @@ export interface CalendarClock {
   minute: number;
 }
 
+export type CalendarTrackerKind =
+  | "lab"
+  | "stronghold"
+  | "merchant"
+  | "dominion"
+  | "siege"
+  | "wilderness"
+  | "dungeon"
+  | "other";
+
 export interface CalendarTracker {
   id: string;
   name: string;
   remainingMinutes: number;
   initialMinutes: number;
+  kind: CalendarTrackerKind;
+  blocking: boolean;
+  startedAt: number;
 }
 
 export interface CalendarLogEntry {
@@ -262,16 +275,76 @@ export interface CalendarState {
   events: CalendarEvent[];
 }
 
-export interface SiegeScenario {
-  id: string;
+export type SiegeQuality = 5 | 10 | 15;
+export type SiegeTactic = "attack" | "envelop" | "trap" | "hold" | "withdraw";
+
+export interface SiegeForce {
   name: string;
-  attackerRating: number;
-  defenderRating: number;
-  notes?: string;
+  troops: number;
+  leaderLevel: number;
+  leaderStatBonus: number;
+  percentNamed: number;
+  avgOfficerLevel: number;
+  avgTroopLevel: number;
+  victories: number;
+  trainingWeeks: number;
+  quality: SiegeQuality;
+  ac5: boolean;
+  elfOrDwarf: boolean;
+  mounts: boolean;
+  missiles: boolean;
+  magic: boolean;
+  flyers: boolean;
+  siegeEngines: {
+    ltCatapult: number;
+    hvCatapult: number;
+    ram: number;
+    tower: number;
+    ballista: number;
+  };
+}
+
+export interface SiegeModifiers {
+  attacker: {
+    terrain: boolean;
+    morale: boolean;
+    fatigue: boolean;
+    intel: boolean;
+    traitor: boolean;
+    heroics: boolean;
+  };
+  defender: {
+    fortified: boolean;
+    terrain: boolean;
+    morale: boolean;
+    fatigue: boolean;
+    intel: boolean;
+    heroics: boolean;
+  };
+}
+
+export interface SiegeBattleLogEntry {
+  id: string;
+  timestamp: number;
+  winner: string;
+  diff: number;
+  attackerTotal: number;
+  defenderTotal: number;
+  attackerLosses: number;
+  defenderLosses: number;
+  notes: string;
+  applied: boolean;
 }
 
 export interface SiegeState {
-  scenarios: SiegeScenario[];
+  attacker: SiegeForce;
+  defender: SiegeForce;
+  tactics: {
+    attacker: SiegeTactic;
+    defender: SiegeTactic;
+  };
+  modifiers: SiegeModifiers;
+  log: SiegeBattleLogEntry[];
 }
 
 export type TradeGoodKey = "food" | "metal" | "cloth" | "wood" | "spice" | "wine" | "weapons" | "gems";
@@ -336,29 +409,99 @@ export interface StrongholdProject {
   status: "planned" | "active" | "complete";
 }
 
+export interface StrongholdComponentSelection {
+  id: string;
+  qty: number;
+}
+
 export interface StrongholdState {
+  projectName: string;
+  terrainMod: number;
+  components: StrongholdComponentSelection[];
   projects: StrongholdProject[];
+}
+
+export type CoinDenomination = "cp" | "sp" | "ep" | "gp" | "pp";
+
+export interface TreasureCoinPile {
+  denomination: CoinDenomination;
+  amount: number;
+  gpValue: number;
+}
+
+export interface TreasureGemEntry {
+  id: string;
+  name: string;
+  value: number;
+}
+
+export interface TreasureMagicItem {
+  id: string;
+  category: string;
+  name: string;
 }
 
 export interface TreasureHoard {
   id: string;
+  type: string;
   label: string;
   totalValue: number;
+  createdAt: number;
+  coins: TreasureCoinPile[];
+  gems: TreasureGemEntry[];
+  jewelry: TreasureGemEntry[];
+  magic: TreasureMagicItem[];
+  notes?: string;
 }
 
 export interface TreasureState {
+  selectedType: string;
   hoards: TreasureHoard[];
 }
 
-export interface LabProject {
-  id: string;
+export type LabClass = "mu" | "cleric";
+export type LabMode = "formula" | "item";
+export type LabItemType = "scroll" | "potion" | "wand" | "ring" | "weapon" | "construct";
+
+export interface LabCaster {
   name: string;
-  category: string;
-  status: "idea" | "in-progress" | "complete";
+  level: number;
+  class: LabClass;
+  mentalStat: number;
+}
+
+export interface LabResources {
+  gold: number;
+  libraryValue: number;
+}
+
+export interface LabWorkbench {
+  mode: LabMode;
+  itemType: LabItemType;
+  spellLevel: number;
+  materialCost: number;
+  hasFormula: boolean;
+}
+
+export interface LabLogEntry {
+  id: string;
+  timestamp: number;
+  title: string;
+  description: string;
+  itemType: LabItemType;
+  outcome: "success" | "fail";
+  roll: number;
+  chance: number;
+  weeks: number;
+  cost: number;
 }
 
 export interface LabState {
-  projects: LabProject[];
+  caster: LabCaster;
+  resources: LabResources;
+  workbench: LabWorkbench;
+  log: LabLogEntry[];
+  activeTrackerId: string | null;
 }
 
 export type DungeonStatus = "idle" | "encounter" | "obstacle" | "loot";
@@ -422,6 +565,123 @@ export interface WarMachineState {
   treasure: TreasureState;
   lab: LabState;
   dungeon: DungeonState;
+}
+
+const STRONGHOLD_DEFAULT_STATE: StrongholdState = {
+  projectName: "Castle Blackrock",
+  terrainMod: 1,
+  components: [],
+  projects: [],
+};
+
+export function createDefaultStrongholdState(): StrongholdState {
+  return JSON.parse(JSON.stringify(STRONGHOLD_DEFAULT_STATE));
+}
+
+const LAB_DEFAULT_STATE: LabState = {
+  caster: {
+    name: "Archmage Solon",
+    level: 9,
+    class: "mu",
+    mentalStat: 16,
+  },
+  resources: {
+    gold: 25000,
+    libraryValue: 10000,
+  },
+  workbench: {
+    mode: "item",
+    itemType: "scroll",
+    spellLevel: 3,
+    materialCost: 1000,
+    hasFormula: false,
+  },
+  log: [],
+  activeTrackerId: null,
+};
+
+export function createDefaultLabState(): LabState {
+  return JSON.parse(JSON.stringify(LAB_DEFAULT_STATE));
+}
+
+const SIEGE_DEFAULT_STATE: SiegeState = {
+  attacker: {
+    name: "Orc Horde",
+    troops: 800,
+    leaderLevel: 10,
+    leaderStatBonus: 2,
+    percentNamed: 3,
+    avgOfficerLevel: 4,
+    avgTroopLevel: 1,
+    victories: 2,
+    trainingWeeks: 12,
+    quality: 5,
+    ac5: false,
+    elfOrDwarf: false,
+    mounts: false,
+    missiles: false,
+    magic: false,
+    flyers: false,
+    siegeEngines: {
+      ltCatapult: 0,
+      hvCatapult: 0,
+      ram: 0,
+      tower: 0,
+      ballista: 0,
+    },
+  },
+  defender: {
+    name: "Elven Garrison",
+    troops: 500,
+    leaderLevel: 12,
+    leaderStatBonus: 4,
+    percentNamed: 10,
+    avgOfficerLevel: 5,
+    avgTroopLevel: 2,
+    victories: 4,
+    trainingWeeks: 16,
+    quality: 10,
+    ac5: true,
+    elfOrDwarf: true,
+    mounts: false,
+    missiles: true,
+    magic: true,
+    flyers: false,
+    siegeEngines: {
+      ltCatapult: 0,
+      hvCatapult: 0,
+      ram: 0,
+      tower: 0,
+      ballista: 2,
+    },
+  },
+  tactics: {
+    attacker: "attack",
+    defender: "attack",
+  },
+  modifiers: {
+    attacker: {
+      terrain: false,
+      morale: false,
+      fatigue: false,
+      intel: false,
+      traitor: false,
+      heroics: false,
+    },
+    defender: {
+      fortified: true,
+      terrain: false,
+      morale: true,
+      fatigue: false,
+      intel: false,
+      heroics: false,
+    },
+  },
+  log: [],
+};
+
+export function createDefaultSiegeState(): SiegeState {
+  return JSON.parse(JSON.stringify(SIEGE_DEFAULT_STATE));
 }
 
 export const DEFAULT_STATE: WarMachineState = {
@@ -509,19 +769,14 @@ export const DEFAULT_STATE: WarMachineState = {
     log: [],
     events: [],
   },
-  siege: {
-    scenarios: [],
-  },
+  siege: createDefaultSiegeState(),
   merchant: INITIAL_MERCHANT_STATE,
-  stronghold: {
-    projects: [],
-  },
+  stronghold: createDefaultStrongholdState(),
   treasure: {
+    selectedType: "A",
     hoards: [],
   },
-  lab: {
-    projects: [],
-  },
+  lab: createDefaultLabState(),
   dungeon: {
     turn: 0,
     depth: 1,

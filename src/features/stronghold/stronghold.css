@@ -1,0 +1,131 @@
+.stronghold-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 960px) {
+  .stronghold-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stronghold-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stronghold-card {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 1rem;
+  background: var(--bg-primary);
+  box-shadow: var(--panel-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.stronghold-card.summary {
+  background: rgba(137, 220, 235, 0.04);
+}
+
+.stronghold-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stronghold-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (min-width: 520px) {
+  .stronghold-actions {
+    flex-direction: row;
+  }
+}
+
+.stronghold-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--panel-radius);
+  border: 1px dashed var(--panel-border);
+  background: rgba(137, 220, 235, 0.04);
+}
+
+.stronghold-add-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(80px, 120px);
+  gap: 0.75rem;
+}
+
+@media (max-width: 520px) {
+  .stronghold-add-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stronghold-component-desc {
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.stronghold-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.stronghold-empty {
+  border: 1px dashed var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 1rem;
+  text-align: center;
+}
+
+.stronghold-item {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--bg-primary);
+}
+
+.stronghold-item-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.stronghold-item-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.stronghold-item-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.stronghold-item-cost {
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stronghold-item-cost .stat-value {
+  margin: 0;
+}
+
