@@ -103,7 +103,6 @@ export interface Character {
 }
 
 export interface PartyResources {
-  bankedGold: number;
   loot: number;
   torches: number;
   rations: number;
@@ -561,7 +560,6 @@ export interface DungeonState {
   torchTurnsUsed: number; // Tracks turns used on current torch (0-5)
   rations: number;
   loot: number;
-  bankedGold: number;
   lairMode: boolean;
   status: DungeonStatus;
   encounter?: DungeonEncounter;
@@ -793,10 +791,8 @@ export const DEFAULT_STATE: WarMachineState = {
       method: "strict",
     },
     partyResources: {
-      bankedGold: 0,
       loot: 0,
       torches: 0,
-      torchTurnsUsed: 0,
       rations: 0,
     },
   },
@@ -883,7 +879,6 @@ export const DEFAULT_STATE: WarMachineState = {
     torchTurnsUsed: 0,
     rations: 7,
     loot: 0,
-    bankedGold: 0,
     lairMode: false,
     status: "idle",
     log: [],

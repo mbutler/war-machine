@@ -1,7 +1,6 @@
 import type { Character } from "../../state/schema";
 
 export interface PartyResourceSummary {
-  bankedGold: number;
   loot: number;
   torches: number;
   rations: number;
@@ -18,7 +17,6 @@ export function calculatePartySnapshot(roster: Character[]): {
   summary: PartyResourceSummary;
   encumbrance: PartyEncumbrance;
 } {
-  let bankedGold = 0;
   let torches = 0;
   let rations = 0;
   let current = 0;
@@ -27,7 +25,6 @@ export function calculatePartySnapshot(roster: Character[]): {
   roster.forEach((character) => {
     const isAlive = character.status !== "dead" && character.derivedStats.hp.current > 0;
     if (isAlive) {
-      bankedGold += character.equipment.gold ?? 0;
       torches += 6;
       rations += 7;
     }
@@ -53,7 +50,6 @@ export function calculatePartySnapshot(roster: Character[]): {
 
   return {
     summary: {
-      bankedGold,
       loot: 0,
       torches,
       rations,

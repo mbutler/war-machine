@@ -15,6 +15,7 @@ import { getAbilityMod } from "../../rules/tables/abilityMods";
 import { RETAINER_TYPES } from "./retainers";
 import type { Retainer } from "../../state/schema";
 import { calculatePartySnapshot } from "./resources";
+import { getLedgerBalance } from "../ledger/state";
 
 const METHODS = [
   { value: "strict", label: "Strict (3d6 in order)" },
@@ -386,7 +387,7 @@ function renderSummary(container: HTMLElement, state: PartyState) {
   };
 
   grid.append(
-    makeStat("Banked Gold", `${snapshot.summary.bankedGold} gp`),
+    makeStat("Treasury", `${getLedgerBalance()} gp`),
     makeStat("Torches", `${snapshot.summary.torches}`),
     makeStat("Rations", `${snapshot.summary.rations}`),
     makeStat("Encumbrance", `${snapshot.encumbrance.current} / ${snapshot.encumbrance.max} cn`),

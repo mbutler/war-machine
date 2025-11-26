@@ -22,6 +22,7 @@ import {
 import type { DungeonLogEntry, PartyState } from "../../state/schema";
 import { getPartyState, subscribeToParty } from "../party/state";
 import { calculatePartySnapshot } from "../party/resources";
+import { getLedgerBalance, subscribeToLedger } from "../ledger/state";
 
 export function renderDungeonPanel(target: HTMLElement) {
   const { element, body } = createPanel("Dungeon Delver", "BECMI delve simulator");
@@ -103,7 +104,7 @@ function renderStatus(container: HTMLElement, dungeon = getDungeonState()) {
     stat("Rations", `${dungeon.rations ?? 0}`),
     stat("Wander Check", `Next in ${nextWanderCheck} turn${nextWanderCheck === 1 ? "" : "s"}`),
     stat("Loot (gp)", `${dungeon.loot ?? 0}`),
-    stat("Banked (gp)", `${dungeon.bankedGold ?? 0}`),
+    stat("Treasury (gp)", `${getLedgerBalance()}`),
   );
 
   container.appendChild(grid);

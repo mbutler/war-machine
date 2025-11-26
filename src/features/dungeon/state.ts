@@ -26,7 +26,6 @@ export function syncDungeonWithParty() {
     const summary = calculatePartySnapshot(state.party.roster);
     state.dungeon.torches = summary.summary.torches;
     state.dungeon.rations = summary.summary.rations;
-    state.dungeon.bankedGold = summary.summary.bankedGold;
   });
 }
 
@@ -404,19 +403,22 @@ export function lootRoom() {
 }
 
 export function bankLoot() {
+  let lootAmount = 0;
+  let depth = 1;
+
   updateState((state) => {
     const dungeon = state.dungeon;
-    const lootAmount = dungeon.loot;
-    dungeon.bankedGold += lootAmount;
+    lootAmount = dungeon.loot;
+    depth = dungeon.depth;
     addLogEntry(dungeon, "loot", "Returned to safety", `Banked ${lootAmount} gp.`);
     dungeon.loot = 0;
     dungeon.status = "idle";
-
-    // Record in the central ledger
-    if (lootAmount > 0) {
-      recordLoot(lootAmount, `Dungeon loot (depth ${dungeon.depth})`);
-    }
   });
+
+  // Record in the central ledger (outside updateState to avoid nested calls)
+  if (lootAmount > 0) {
+    recordLoot(lootAmount, `Dungeon loot (depth ${depth})`);
+  }
 }
 
 export function clearLog() {
@@ -651,7 +653,6 @@ function normalizeDungeonState(raw: DungeonState | undefined): DungeonState {
     torchTurnsUsed: raw?.torchTurnsUsed ?? 0,
     rations: raw?.rations ?? 0,
     loot: raw?.loot ?? 0,
-    bankedGold: raw?.bankedGold ?? 0,
     lairMode: raw?.lairMode ?? false,
     status: raw?.status ?? "idle",
     encounter: raw?.encounter,

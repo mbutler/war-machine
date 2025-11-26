@@ -5,6 +5,7 @@ import { GenerateCharacterOptions, GenerationMethod, generateCharacter } from ".
 import { RETAINER_TYPES, generateRetainer } from "./retainers";
 import { calculatePartySnapshot } from "./resources";
 import { createId } from "../../utils/id";
+import { recordIncome, setLedgerBalance } from "../ledger/state";
 
 export interface PartyGenerationRequest {
   size: number;
@@ -30,10 +31,15 @@ function createGenerationOptions(request: PartyGenerationRequest): GenerateChara
 }
 
 export function generateParty(request: PartyGenerationRequest) {
+  let totalStartingGold = 0;
+
   updateState((state) => {
     const roster = [];
     for (let i = 0; i < request.size; i += 1) {
-      roster.push(generateCharacter(createGenerationOptions(request)));
+      const character = generateCharacter(createGenerationOptions(request));
+      roster.push(character);
+      // Sum up leftover gold from each character
+      totalStartingGold += character.equipment.gold ?? 0;
     }
     state.party.roster = roster;
     state.party.preferences = {
@@ -42,7 +48,21 @@ export function generateParty(request: PartyGenerationRequest) {
       method: request.method,
     };
     refreshPartyResources(state.party);
+
+    // Reset ledger and add starting gold
+    state.ledger.balance = 0;
+    state.ledger.transactions = [];
   });
+
+  // Record starting gold in the ledger (outside updateState to avoid nested calls)
+  if (totalStartingGold > 0) {
+    recordIncome(
+      totalStartingGold,
+      "party",
+      "misc",
+      `Party starting gold (${request.size} characters)`,
+    );
+  }
 }
 
 export function addRetainerToCharacter(characterId: string, typeId: string) {
