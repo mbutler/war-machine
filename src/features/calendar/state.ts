@@ -108,6 +108,7 @@ export function advanceCalendar(unit: CalendarAdvanceUnit, amount = 1): Calendar
     }
     addCalendarLog(calendar, `Time passed: +${amount} ${unit}${amount === 1 ? "" : "s"}`, `${before} → ${after}`);
   });
+  return expired;
 
   if (expired.length) {
     emitCalendarEvent({ type: "timers-expired", trackers: expired });
@@ -283,7 +284,7 @@ export function formatDuration(minutes: number): string {
   return "Moments";
 }
 
-function addCalendarLog(state: CalendarState, action: string, detail?: string) {
+export function addCalendarLog(state: CalendarState, action: string, detail?: string) {
   const log = Array.isArray(state.log) ? state.log : [];
   log.unshift({
     id: createId(),
@@ -294,12 +295,12 @@ function addCalendarLog(state: CalendarState, action: string, detail?: string) {
   state.log = log.slice(0, MAX_LOG_ENTRIES);
 }
 
-function describeClock(clock: CalendarClock): string {
+export function describeClock(clock: CalendarClock): string {
   const safe = normalizeClock(clock);
   return `${formatCalendarDate(safe)} ${formatCalendarTime(safe)}`;
 }
 
-function advanceClock(clock: CalendarClock, unit: CalendarAdvanceUnit, amount: number) {
+export function advanceClock(clock: CalendarClock, unit: CalendarAdvanceUnit, amount: number) {
   const target = normalizeClock(clock);
   switch (unit) {
     case "round":

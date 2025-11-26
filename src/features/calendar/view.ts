@@ -1,6 +1,7 @@
 import type { CalendarState, CalendarTracker, CalendarTrackerKind } from "../../state/schema";
 import { createPanel } from "../../layout/panels";
 import { showNotification } from "../../layout/notifications";
+import { updateState } from "../../state/store";
 import {
   addCalendarTracker,
   advanceCalendar,

@@ -94,11 +94,14 @@ function renderStatus(container: HTMLElement, dungeon = getDungeonState()) {
     return box;
   };
 
+  const nextWanderCheck = dungeon.turn % 2 === 0 ? 2 : 1;
+
   grid.append(
     stat("Depth", `Level ${dungeon.depth ?? 1}`),
     stat("Turn", `${dungeon.turn ?? 0}`),
-    stat("Torches", `${dungeon.torches ?? 0}`),
+    stat("Torches", `${dungeon.torches ?? 0}${dungeon.torchTurnsUsed ? ` (${6 - dungeon.torchTurnsUsed} turns left)` : ""}`),
     stat("Rations", `${dungeon.rations ?? 0}`),
+    stat("Wander Check", `Next in ${nextWanderCheck} turn${nextWanderCheck === 1 ? "" : "s"}`),
     stat("Loot (gp)", `${dungeon.loot ?? 0}`),
     stat("Banked (gp)", `${dungeon.bankedGold ?? 0}`),
   );

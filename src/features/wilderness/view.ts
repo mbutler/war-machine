@@ -7,6 +7,7 @@ import {
   forageCurrentHex,
   getWildernessState,
   importWildernessData,
+  loadStaticMapFromJSON,
   moveParty,
   refillWater,
   resetWilderness,
@@ -15,8 +16,12 @@ import {
   setPartySize,
   setRations,
   setStartTerrain,
+  setStaticMapMode,
   setWater,
   subscribeToWilderness,
+  unloadStaticMap,
+  getLightCondition,
+  type LightCondition,
 } from "./state";
 
 const HEX_SIZE = 25;
@@ -31,6 +36,12 @@ const TERRAIN_COST_LABELS: Record<string, string> = {
   city: "4 Miles",
   river: "6 Miles",
   ocean: "12 Miles",
+};
+
+const LIGHT_CONDITION_LABELS: Record<LightCondition, string> = {
+  clear_daylight: "Clear Daylight",
+  dim_light: "Dim Light",
+  no_light: "No Light",
 };
 
 export function renderWildernessPanel(target: HTMLElement) {
@@ -215,6 +226,68 @@ export function renderWildernessPanel(target: HTMLElement) {
   importLabel.appendChild(importInput);
   generatorBlock.appendChild(importLabel);
 
+  // Static Map Controls
+  const staticMapBlock = document.createElement("div");
+  staticMapBlock.style.borderTop = "1px solid var(--panel-border)";
+  staticMapBlock.style.paddingTop = "0.75rem";
+  staticMapBlock.style.marginTop = "0.75rem";
+  generatorBlock.appendChild(staticMapBlock);
+
+  const staticMapTitle = document.createElement("div");
+  staticMapTitle.className = "panel-heading";
+  staticMapTitle.textContent = "Static Map (Python Generated)";
+  staticMapBlock.appendChild(staticMapTitle);
+
+  const staticMapButtons = document.createElement("div");
+  staticMapButtons.style.display = "flex";
+  staticMapButtons.style.gap = "0.5rem";
+  staticMapButtons.style.marginTop = "0.5rem";
+
+  const toggleStaticButton = document.createElement("button");
+  toggleStaticButton.type = "button";
+  toggleStaticButton.className = "button";
+  toggleStaticButton.textContent = "Toggle Static/Procedural";
+  toggleStaticButton.addEventListener("click", () => {
+    const state = getWildernessState();
+    if (state.staticMapMode) {
+      unloadStaticMap();
+      showNotification({ title: "Map mode changed", message: "Switched to procedural generation.", variant: "info" });
+    } else {
+      setStaticMapMode(true);
+      showNotification({ title: "Map mode changed", message: "Switched to static map mode.", variant: "info" });
+    }
+  });
+
+  const importStaticLabel = document.createElement("label");
+  importStaticLabel.className = "button";
+  importStaticLabel.textContent = "Import Static Map (JSON)";
+
+  const importStaticInput = document.createElement("input");
+  importStaticInput.type = "file";
+  importStaticInput.accept = "application/json";
+  importStaticInput.className = "visually-hidden";
+  importStaticInput.addEventListener("change", () => {
+    const file = importStaticInput.files?.[0];
+    if (!file) return;
+    file
+      .text()
+      .then((text) => {
+        try {
+          loadStaticMapFromJSON(text);
+          showNotification({ title: "Static map imported", message: "Python-generated world loaded.", variant: "success" });
+        } catch (error) {
+          showNotification({ title: "Import failed", message: (error as Error).message, variant: "danger" });
+        }
+      })
+      .finally(() => {
+        importStaticInput.value = "";
+      });
+  });
+  importStaticLabel.appendChild(importStaticInput);
+
+  staticMapButtons.append(toggleStaticButton, importStaticLabel);
+  staticMapBlock.appendChild(staticMapButtons);
+
   // Map column
   const mapWrapper = document.createElement("div");
   mapWrapper.className = "wilderness-map-wrapper";
@@ -341,7 +414,9 @@ export function renderWildernessPanel(target: HTMLElement) {
     climateSelect.value = state.climate;
     refillButton.disabled = !canRefillWater(state);
 
-    const milesDisplay = `${state.days} days, ${Math.floor(state.movementPoints)}/${state.maxMovementPoints} Miles`;
+    const lightCondition = getLightCondition();
+    const lightLabel = LIGHT_CONDITION_LABELS[lightCondition];
+    const milesDisplay = `${state.days} days, ${Math.floor(state.movementPoints)}/${state.maxMovementPoints} Miles · ${lightLabel}`;
     timeBand.textContent = milesDisplay;
 
     const position = Number.isFinite(state.currentPos?.q)

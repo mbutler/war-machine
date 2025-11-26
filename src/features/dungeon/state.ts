@@ -9,7 +9,7 @@ import { randomObstacle } from "../../rules/dungeon/obstacles";
 import { MAGIC_ITEMS, TREASURE_TYPES } from "../../rules/dungeon/treasure";
 import { createId } from "../../utils/id";
 import { markSpellExpended } from "../party/state";
-import { advanceCalendar } from "../calendar/state";
+import { describeClock, advanceClock, addCalendarLog } from "../calendar/state";
 
 type DungeonListener = (state: ReturnType<typeof getDungeonState>) => void;
 
@@ -47,24 +47,45 @@ export function exploreRoom() {
     const dungeon = state.dungeon;
     const turnsSpent = advanceTurn(dungeon);
 
-    const encounterRoll = rollDie(20);
-    const definition = pickEncounter(dungeon.depth, encounterRoll);
+    // BECMI dungeon exploration: Most rooms are empty or have features
+    const roomResult = determineRoomContents();
 
-    if (definition) {
-      const built = buildEncounter(definition, dungeon.depth);
-      dungeon.status = "encounter";
-      dungeon.encounter = built;
-      dungeon.obstacle = undefined;
-      addLogEntry(dungeon, "combat", `Encounter: ${built.name}`, `${built.quantity} foes (HD ${built.hitDice})`);
-    } else {
+    if (roomResult.type === "encounter") {
+      // Rare: room contains monsters (placed encounter)
+      const encounterRoll = rollDie(20);
+      const definition = pickEncounter(dungeon.depth, encounterRoll);
+      if (definition) {
+        const built = buildEncounter(definition, dungeon.depth);
+        dungeon.status = "encounter";
+        dungeon.encounter = built;
+        dungeon.obstacle = undefined;
+        addLogEntry(dungeon, "combat", `Room contains: ${built.name}`, `${built.quantity} foes (HD ${built.hitDice})`);
+      } else {
+        // Fallback to empty room
+        dungeon.status = "idle";
+        addLogEntry(dungeon, "event", "Empty room", "The room appears to be empty.");
+      }
+    } else if (roomResult.type === "obstacle") {
+      // Room has a feature or trap
       const obstacle = randomObstacle();
       dungeon.status = "obstacle";
       dungeon.obstacle = { ...obstacle };
       dungeon.encounter = undefined;
-      addLogEntry(dungeon, "event", `Obstacle: ${obstacle.name}`, obstacle.description);
+      addLogEntry(dungeon, "event", `Room feature: ${obstacle.name}`, obstacle.description);
+    } else {
+      // Empty room
+      dungeon.status = "idle";
+      addLogEntry(dungeon, "event", "Empty room", roomResult.description);
     }
 
-    syncCalendarTurns(turnsSpent);
+    // Advance calendar time
+    if (turnsSpent > 0) {
+      const calendar = state.calendar;
+      const before = describeClock(calendar.clock);
+      advanceClock(calendar.clock, "turn", turnsSpent);
+      const after = describeClock(calendar.clock);
+      addCalendarLog(calendar, `Dungeon exploration: +${turnsSpent} turn${turnsSpent === 1 ? "" : "s"}`, `${before} → ${after}`);
+    }
   });
 }
 
@@ -291,16 +312,60 @@ export function searchRoom() {
   updateState((state) => {
     const dungeon = state.dungeon;
     turnsSpent = advanceTurn(dungeon);
-    const found = Math.random() < 0.3;
-    if (found) {
-      const loot = Math.max(1, rollFormula("1d6"));
+
+    // Search results: vary based on thoroughness and luck
+    const searchRoll = rollDie(100);
+
+    if (searchRoll <= 20) {
+      // Found treasure!
+      const loot = Math.max(1, rollFormula("2d6"));
       dungeon.loot += loot;
-      addLogEntry(dungeon, "loot", "Found hidden stash", `${loot} gp worth of goods.`);
+      addLogEntry(dungeon, "loot", "Treasure discovered!", `Found ${loot} gp in a hidden compartment.`);
+    } else if (searchRoll <= 40) {
+      // Found something interesting but not valuable
+      const discoveries = [
+        "Discovered faded runes on the wall describing an ancient curse.",
+        "Found a skeleton clutching a rusted dagger.",
+        "Unearthed a cracked crystal that pulses with faint magic.",
+        "Discovered a hidden inscription: 'The third torch from the left holds the key.'",
+        "Found strange symbols carved into the stone floor.",
+        "Located an old leather-bound book, pages crumbling to dust."
+      ];
+      addLogEntry(dungeon, "event", "Discovery made", discoveries[Math.floor(Math.random() * discoveries.length)]);
+    } else if (searchRoll <= 60) {
+      // Found minor useful item
+      const items = [
+        "Found 1d4 days worth of iron rations in a concealed cache.",
+        "Discovered a flask of oil for torches.",
+        "Located a coil of 50' of rope in good condition.",
+        "Found a tinderbox with flint and steel.",
+        "Unearthed a small sack containing 2d10 copper pieces.",
+        "Located a wineskin filled with fresh water."
+      ];
+      const itemResult = items[Math.floor(Math.random() * items.length)];
+      // Could add these to inventory, but for now just describe
+      addLogEntry(dungeon, "event", "Useful item found", itemResult);
     } else {
-      addLogEntry(dungeon, "event", "Search yields nothing");
+      // Nothing found
+      const noFindMessages = [
+        "After thorough searching, nothing of value is found.",
+        "The room has been picked clean by previous explorers.",
+        "Your search reveals only dust and debris.",
+        "No hidden compartments or secret doors are discovered.",
+        "The room yields no secrets to your careful examination."
+      ];
+      addLogEntry(dungeon, "event", "Search complete", noFindMessages[Math.floor(Math.random() * noFindMessages.length)]);
+    }
+
+    // Advance calendar time
+    if (turnsSpent > 0) {
+      const calendar = state.calendar;
+      const before = describeClock(calendar.clock);
+      advanceClock(calendar.clock, "turn", turnsSpent);
+      const after = describeClock(calendar.clock);
+      addCalendarLog(calendar, `Dungeon search: +${turnsSpent} turn${turnsSpent === 1 ? "" : "s"}`, `${before} → ${after}`);
     }
   });
-  syncCalendarTurns(turnsSpent);
 }
 
 export function restParty() {
@@ -314,8 +379,16 @@ export function restParty() {
     } else {
       addLogEntry(dungeon, "event", "Rested without rations", "Fatigue may become an issue.");
     }
+
+    // Advance calendar time
+    if (turnsSpent > 0) {
+      const calendar = state.calendar;
+      const before = describeClock(calendar.clock);
+      advanceClock(calendar.clock, "turn", turnsSpent);
+      const after = describeClock(calendar.clock);
+      addCalendarLog(calendar, `Dungeon rest: +${turnsSpent} turn${turnsSpent === 1 ? "" : "s"}`, `${before} → ${after}`);
+    }
   });
-  syncCalendarTurns(turnsSpent);
 }
 
 export function lootRoom() {
@@ -348,8 +421,9 @@ export function clearLog() {
 
 export function consumeTorch(amount = 1) {
   updateState((state) => {
+    // Force consumption of torches (e.g., for light spells, etc.)
     state.dungeon.torches = Math.max(0, state.dungeon.torches - amount);
-    addLogEntry(state.dungeon, "event", `Torches used (${amount})`);
+    addLogEntry(state.dungeon, "event", `Torches consumed (${amount})`);
   });
 }
 
@@ -390,17 +464,76 @@ export function castSpellDuringDelve(characterId: string, spellName: string) {
 function advanceTurn(dungeon: typeof DEFAULT_STATE.dungeon, turns = 1): number {
   if (turns <= 0) return 0;
   dungeon.turn += turns;
-  if (dungeon.torches > 0) {
-    dungeon.torches = Math.max(0, dungeon.torches - turns);
+
+  // Handle torch consumption - each torch burns for 6 turns (1 hour)
+  const TORCH_DURATION_TURNS = 6;
+  for (let i = 0; i < turns; i++) {
+    if (dungeon.torches > 0) {
+      dungeon.torchTurnsUsed++;
+      if (dungeon.torchTurnsUsed >= TORCH_DURATION_TURNS) {
+        dungeon.torches--;
+        dungeon.torchTurnsUsed = 0;
+        addLogEntry(dungeon, "event", `Torch burned out (${dungeon.torches} remaining)`);
+      }
+    }
   }
+
+  // Check for wandering monsters every 2 turns (BECMI rule)
+  if (dungeon.turn % 2 === 0) {
+    checkWanderingMonsters(dungeon);
+  }
+
   return turns;
 }
 
-function syncCalendarTurns(turns: number) {
-  if (turns > 0) {
-    advanceCalendar("turn", turns);
+function determineRoomContents(): { type: "empty" | "obstacle" | "encounter"; description?: string } {
+  // BECMI room exploration probabilities:
+  // - 70% empty room
+  // - 20% feature/trap (obstacle)
+  // - 10% contains monsters (placed encounter)
+  const roll = rollDie(100);
+
+  if (roll <= 70) {
+    // Empty room - add some variety in descriptions
+    const emptyDescriptions = [
+      "The room appears to be empty.",
+      "Nothing of interest catches your eye.",
+      "The chamber is bare except for dust and cobwebs.",
+      "This room has been stripped clean long ago.",
+      "An empty chamber with signs of previous habitation.",
+      "The room contains only debris and rubble."
+    ];
+    return {
+      type: "empty",
+      description: emptyDescriptions[Math.floor(Math.random() * emptyDescriptions.length)]
+    };
+  } else if (roll <= 90) {
+    // Room has a feature or trap
+    return { type: "obstacle" };
+  } else {
+    // Rare: room contains monsters (placed encounter)
+    return { type: "encounter" };
   }
 }
+
+function checkWanderingMonsters(dungeon: typeof DEFAULT_STATE.dungeon) {
+  // BECMI wandering monster check: 1d6, encounter on roll of 1
+  const roll = rollDie(6);
+  if (roll === 1) {
+    // Wandering monster encountered during travel
+    const encounterRoll = rollDie(20);
+    const definition = pickEncounter(dungeon.depth, encounterRoll);
+
+    if (definition) {
+      const built = buildEncounter(definition, dungeon.depth);
+      dungeon.status = "encounter";
+      dungeon.encounter = built;
+      dungeon.obstacle = undefined;
+      addLogEntry(dungeon, "combat", `Wandering monsters: ${built.name}`, `${built.quantity} foes (HD ${built.hitDice}) spotted during travel!`);
+    }
+  }
+}
+
 
 function addLogEntry(dungeon: typeof DEFAULT_STATE.dungeon, kind: DungeonLogEntry["kind"], summary: string, detail?: string) {
   dungeon.log.unshift({
@@ -509,6 +642,7 @@ function normalizeDungeonState(raw: DungeonState | undefined): DungeonState {
     turn: raw?.turn ?? 0,
     depth: raw?.depth ?? 1,
     torches: raw?.torches ?? 0,
+    torchTurnsUsed: raw?.torchTurnsUsed ?? 0,
     rations: raw?.rations ?? 0,
     loot: raw?.loot ?? 0,
     bankedGold: raw?.bankedGold ?? 0,

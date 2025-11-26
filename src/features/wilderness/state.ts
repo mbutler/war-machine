@@ -7,7 +7,7 @@ import type {
 } from "../../state/schema";
 import { getState, subscribe, updateState } from "../../state/store";
 import { createId } from "../../utils/id";
-import { advanceCalendar } from "../calendar/state";
+import { advanceCalendar, advanceClock, addCalendarLog, describeClock, getCalendarMoonPhase } from "../calendar/state";
 
 export type WildernessListener = (state: WildernessState) => void;
 
@@ -28,6 +28,22 @@ const VALID_TERRAINS: WildernessTerrainType[] = [
   "river",
   "ocean",
 ];
+
+// Terrain type mapping from Python BECMI generator to Wilderness system
+const PYTHON_TO_WILDERNESS_TERRAIN: Record<string, WildernessTerrainType> = {
+  "Clear": "clear",      // Grasslands
+  "Forest": "woods",     // Woods
+  "Hills": "hills",      // Hills
+  "Mountains": "mountain", // Mountains
+  "Swamp": "swamp",      // Swamp
+  "Desert": "desert",    // Desert
+  "Jungle": "woods",     // Jungle -> Woods (closest match)
+  "Glacier": "mountain", // Glacier -> Mountain
+  "Barren": "desert",    // Barren -> Desert
+  "Deep Sea": "ocean",   // Deep Sea -> Ocean
+  "Sea": "ocean",        // Sea -> Ocean
+  "Coast": "clear",      // Coast -> Clear (could be city, but clear for now)
+};
 
 const TERRAIN_DATA: Record<
   WildernessTerrainType,
@@ -124,93 +140,167 @@ const TERRAIN_DATA: Record<
   },
 };
 
-const TERRAIN_TABLES: Record<WildernessTerrainType, string[]> = {
-  clear: ["Men", "Men", "Flyer", "Humanoid", "Animal", "Animal", "Unusual", "Dragon"],
-  woods: ["Men", "Flyer", "Humanoid", "Humanoid", "Animal", "Animal", "Unusual", "Dragon"],
-  hills: ["Men", "Flyer", "Humanoid", "Humanoid", "Animal", "Unusual", "Dragon", "Dragon"],
-  mountain: ["Men", "Flyer", "Humanoid", "Unusual", "Unusual", "Animal", "Dragon", "Dragon"],
-  swamp: ["Men", "Flyer", "Humanoid", "Undead", "Undead", "Swimmer", "Dragon", "Unusual"],
-  river: ["Men", "Flyer", "Humanoid", "Swimmer", "Swimmer", "Swimmer", "Animal", "Dragon"],
-  desert: ["Men", "Men", "Flyer", "Humanoid", "Undead", "Unusual", "Dragon", "Dragon"],
-  city: ["Men", "Men", "Men", "Men", "Men", "Humanoid", "Undead", "Giant"],
-  ocean: ["Men", "Men", "Flyer", "Humanoid", "Swimmer", "Swimmer", "Dragon", "Dragon"],
+// BECMI Wilderness Encounters Table
+// Main table: Roll 1d8 to determine subtable, then roll 1d12 on subtable by terrain
+const MAIN_ENCOUNTER_TABLE: Record<number, string> = {
+  1: "Human",
+  2: "Humanoid",
+  3: "Animal",    // Varies by terrain: Animal/Insect/Swimmer
+  4: "Animal",    // Varies by terrain: Animal/Unusual/Swimmer
+  5: "Unusual",   // Varies by terrain: Unusual/Animal/Swimmer
+  6: "Dragon",    // Varies by terrain: Dragon/Animal/Animal
+  7: "Insect",    // Varies by terrain: Insect/Dragon/Dragon
+  8: "Special",   // For city terrain
 };
 
-const ENCOUNTER_DATA: Record<string, Array<{ name: string; qty: string }>> = {
+// Terrain groupings for subtable lookups
+const TERRAIN_GROUPINGS = {
+  clear: "Clear",
+  woods: "Woods",
+  hills: "Hills",
+  mountain: "Mountain", // BECMI groups as "Barren, Mountain, Hill"
+  swamp: "Swamp",
+  desert: "Desert",
+  city: "City",
+  river: "River",
+  ocean: "Ocean",
+} as const;
+
+// BECMI Wilderness Encounter Subtables
+const ENCOUNTER_DATA: Record<string, Array<{ name: string; qty: string; treasure?: string }>> = {
+  // Subtable 3: Humans (varies by terrain - simplified to core types)
   menus: [
-    { name: "Bandit", qty: "1d6+3" },
-    { name: "Brigand", qty: "2d4" },
-    { name: "Berserker", qty: "1d6" },
-    { name: "Fighter Patrol", qty: "1d6" },
-    { name: "Merchant", qty: "1d20" },
-    { name: "NPC Party", qty: "1d6+2" },
+    { name: "Adventurer", qty: "1d6", treasure: "V" },
+    { name: "Bandit", qty: "1d6+3", treasure: "(U) A" },
+    { name: "Berserker", qty: "1d6", treasure: "(Q) B" },
+    { name: "Brigand", qty: "2d4", treasure: "(T) A" },
+    { name: "Buccaneer", qty: "1d6", treasure: "(S) A" },
+    { name: "Caveman", qty: "1d6", treasure: "Nil" },
+    { name: "Cleric", qty: "1d3", treasure: "V" },
+    { name: "Dervish", qty: "1d6", treasure: "(T) A" },
+    { name: "Fighter", qty: "1d6", treasure: "V" },
+    { name: "Magic-User", qty: "1d3", treasure: "V" },
+    { name: "Merchant", qty: "1d20", treasure: "(U) C" },
+    { name: "NPC Party", qty: "1d6+2", treasure: "V" },
   ],
+
+  // Subtable 2: Humanoids
   humanoid: [
-    { name: "Goblin", qty: "2d4" },
-    { name: "Hobgoblin", qty: "1d6" },
-    { name: "Orc", qty: "1d6" },
-    { name: "Gnoll", qty: "1d6" },
-    { name: "Kobold", qty: "4d4" },
-    { name: "Ogre", qty: "1d3" },
+    { name: "Bugbear", qty: "1d6", treasure: "B" },
+    { name: "Cyclops", qty: "1", treasure: "E" },
+    { name: "Dwarf", qty: "2d4", treasure: "(M) G" },
+    { name: "Elf", qty: "1d6", treasure: "(E) E" },
+    { name: "Giant, Cloud", qty: "1", treasure: "E" },
+    { name: "Giant, Fire", qty: "1", treasure: "E" },
+    { name: "Giant, Frost", qty: "1", treasure: "E" },
+    { name: "Giant, Hill", qty: "1d4", treasure: "D" },
+    { name: "Giant, Stone", qty: "1", treasure: "E" },
+    { name: "Giant, Storm", qty: "1", treasure: "E" },
+    { name: "Gnome", qty: "1d6", treasure: "(O) N" },
+    { name: "Goblin", qty: "2d4", treasure: "(R) C" },
   ],
+
+  // Subtable 4: Flyers
   flyer: [
-    { name: "Gargoyle", qty: "1d6" },
-    { name: "Griffon", qty: "1d6" },
-    { name: "Harpy", qty: "1d6" },
-    { name: "Hippogriff", qty: "2d8" },
-    { name: "Pegasus", qty: "1d12" },
-    { name: "Roc", qty: "1d20" },
-    { name: "Dragon", qty: "1" },
+    { name: "Bee, Giant", qty: "1d6", treasure: "Nil" },
+    { name: "Gargoyle", qty: "1d6", treasure: "C" },
+    { name: "Griffon", qty: "1d6", treasure: "D" },
+    { name: "Harpy", qty: "1d6", treasure: "C" },
+    { name: "Hippogriff", qty: "2d8", treasure: "C" },
+    { name: "Insect Swarm", qty: "1", treasure: "Nil" },
+    { name: "Manticore", qty: "1d4", treasure: "D" },
+    { name: "Pegasus", qty: "1d12", treasure: "Nil" },
+    { name: "Robber Fly", qty: "1d6", treasure: "Nil" },
+    { name: "Roc, Small", qty: "1", treasure: "I" },
+    { name: "Roc, Large", qty: "1", treasure: "I" },
+    { name: "Roc, Giant", qty: "1", treasure: "I" },
   ],
+
+  // Subtable 1: Animals (simplified - BECMI has terrain-specific variants)
   animal: [
-    { name: "Antelope", qty: "3d10" },
-    { name: "Boar", qty: "1d6" },
-    { name: "Great Cat", qty: "1d4" },
-    { name: "Bear", qty: "1d4" },
-    { name: "Wolf", qty: "2d6" },
+    { name: "Animal Herd", qty: "2d10", treasure: "Nil" },
+    { name: "Ape, Snow", qty: "1d4", treasure: "Nil" },
+    { name: "Ape, White", qty: "1d4", treasure: "Nil" },
+    { name: "Baboon, Rock", qty: "1d6", treasure: "Nil" },
+    { name: "Bear, Cave", qty: "1d4", treasure: "Nil" },
+    { name: "Bear, Grizzly", qty: "1d4", treasure: "Nil" },
+    { name: "Boar", qty: "1d6", treasure: "Nil" },
+    { name: "Camel", qty: "1d6", treasure: "Nil" },
+    { name: "Cat, Lion", qty: "1d4", treasure: "Nil" },
+    { name: "Cat, Panther", qty: "1d4", treasure: "Nil" },
+    { name: "Cat, Sabretooth", qty: "1d2", treasure: "Nil" },
+    { name: "Cat, Tiger", qty: "1d4", treasure: "Nil" },
   ],
+
+  // Subtable 5: Swimmers
   swimmer: [
-    { name: "Crocodile", qty: "1d6" },
-    { name: "Giant Fish", qty: "1d6" },
-    { name: "Giant Leech", qty: "1d4" },
-    { name: "Lizard Men", qty: "2d4" },
+    { name: "Crocodile", qty: "1d6", treasure: "Nil" },
+    { name: "Crocodile, Large", qty: "1d3", treasure: "D" },
+    { name: "Fish, Rock", qty: "1d6", treasure: "Nil" },
+    { name: "Giant Fish", qty: "1d6", treasure: "Nil" },
+    { name: "Leech, Giant", qty: "1d4", treasure: "Nil" },
+    { name: "Lizard Man", qty: "2d4", treasure: "D" },
+    { name: "Toad, Giant", qty: "1d6", treasure: "Nil" },
+    { name: "Shrew, Giant", qty: "1d4", treasure: "Nil" },
+    { name: "Snake, Python", qty: "1d6", treasure: "Nil" },
+    { name: "Snake, Rattler", qty: "1d6", treasure: "Nil" },
+    { name: "Snake, Viper", qty: "1d6", treasure: "Nil" },
+    { name: "Turtle, Giant", qty: "1d2", treasure: "Nil" },
   ],
+
+  // Subtable 6: Dragons
   dragon: [
-    { name: "Black Dragon", qty: "1" },
-    { name: "Blue Dragon", qty: "1" },
-    { name: "Green Dragon", qty: "1" },
-    { name: "Red Dragon", qty: "1" },
-    { name: "White Dragon", qty: "1" },
-    { name: "Chimera", qty: "1d2" },
-    { name: "Wyvern", qty: "1d3" },
-    { name: "Hydra", qty: "1" },
+    { name: "Chimera", qty: "1d2", treasure: "F" },
+    { name: "Dragon, Black", qty: "1", treasure: "H" },
+    { name: "Dragon, Blue", qty: "1", treasure: "H" },
+    { name: "Dragon, Gold", qty: "1", treasure: "H" },
+    { name: "Dragon, Green", qty: "1", treasure: "H" },
+    { name: "Dragon, Red", qty: "1", treasure: "H" },
+    { name: "Dragon, White", qty: "1", treasure: "H" },
+    { name: "Hydra", qty: "1", treasure: "B" },
+    { name: "Salamander, Flame", qty: "1d4", treasure: "E" },
+    { name: "Salamander, Frost", qty: "1d4", treasure: "E" },
+    { name: "Wyvern", qty: "1d3", treasure: "E" },
+    { name: "Dragon, White", qty: "1", treasure: "H" }, // Duplicate for 12th slot
   ],
+
+  // Subtable 8: Undead
   undead: [
-    { name: "Ghoul", qty: "1d6" },
-    { name: "Skeleton", qty: "3d4" },
-    { name: "Wight", qty: "1d3" },
-    { name: "Wraith", qty: "1d3" },
-    { name: "Vampire", qty: "1" },
-    { name: "Spectre", qty: "1d2" },
-    { name: "Zombie", qty: "2d4" },
+    { name: "Ghoul", qty: "1d6", treasure: "Nil" },
+    { name: "Ghoul", qty: "1d6", treasure: "Nil" },
+    { name: "Ghoul", qty: "1d6", treasure: "Nil" },
+    { name: "Mummy", qty: "1", treasure: "D" },
+    { name: "Skeleton", qty: "3d4", treasure: "Nil" },
+    { name: "Skeleton", qty: "3d4", treasure: "Nil" },
+    { name: "Spectre", qty: "1d2", treasure: "E" },
+    { name: "Wight", qty: "1d3", treasure: "B" },
+    { name: "Wraith", qty: "1d3", treasure: "E" },
+    { name: "Vampire", qty: "1", treasure: "F" },
+    { name: "Zombie", qty: "2d4", treasure: "Nil" },
+    { name: "Zombie", qty: "2d4", treasure: "Nil" },
   ],
+
+  // Subtable 9: Unusual
   unusual: [
-    { name: "Basilisk", qty: "1d6" },
-    { name: "Centaur", qty: "1d6" },
-    { name: "Giant", qty: "1d6" },
-    { name: "Lycanthrope", qty: "1d6" },
-    { name: "Medusa", qty: "1d3" },
-    { name: "Treant", qty: "1d6" },
-  ],
-  giant: [
-    { name: "Hill Giant", qty: "1d4" },
-    { name: "Stone Giant", qty: "1d4" },
-    { name: "Fire Giant", qty: "1d4" },
+    { name: "Basilisk", qty: "1d6", treasure: "F" },
+    { name: "Blink Dog", qty: "1d6", treasure: "C" },
+    { name: "Centaur", qty: "1d6", treasure: "D" },
+    { name: "Displacer Beast", qty: "1d2", treasure: "E" },
+    { name: "Gorgon", qty: "1d2", treasure: "E" },
+    { name: "Lycanthrope, Werebear", qty: "1d4", treasure: "C" },
+    { name: "Lycanthrope, Wereboar", qty: "1d4", treasure: "D" },
+    { name: "Lycanthrope, Wererat", qty: "1d6", treasure: "C" },
+    { name: "Lycanthrope, Weretiger", qty: "1d4", treasure: "C" },
+    { name: "Lycanthrope, Werewolf", qty: "1d6", treasure: "C" },
+    { name: "Medusa", qty: "1d3", treasure: "F" },
+    { name: "Treant", qty: "1d6", treasure: "C" },
   ],
 };
 
 const CLASSES = ["Fighter", "Cleric", "Magic-User", "Thief", "Dwarf", "Elf"];
 const ALIGNMENTS = ["Lawful", "Neutral", "Chaotic"];
+
+export type LightCondition = "clear_daylight" | "dim_light" | "no_light";
 
 const DIRS_ODD = [
   { q: -1, r: -1 },
@@ -266,6 +356,8 @@ export function resetWilderness(options: { startTerrain?: WildernessTerrainType;
       climate: options.climate ?? state.wilderness.climate,
       weather: generateWeather(options.climate ?? state.wilderness.climate),
       log: [],
+      staticMapMode: state.wilderness.staticMapMode || false,
+      staticMapData: state.wilderness.staticMapData,
     };
   });
 }
@@ -319,7 +411,15 @@ export function moveParty(directionIndex: number) {
     const finalData = TERRAIN_DATA[finalHex.type] ?? TERRAIN_DATA.clear;
     wilderness.currentPos = nextPos;
 
-    spendMovementPoints(wilderness, finalData.mpCost);
+    const hoursAdvanced = spendMovementPoints(wilderness, finalData.mpCost);
+    if (hoursAdvanced > 0) {
+      // Advance calendar directly in the same updateState transaction
+      const calendar = state.calendar;
+      const before = describeClock(calendar.clock);
+      advanceClock(calendar.clock, "hour", hoursAdvanced);
+      const after = describeClock(calendar.clock);
+      addCalendarLog(calendar, `Time passed: +${hoursAdvanced} hour${hoursAdvanced === 1 ? "" : "s"}`, `${before} → ${after}`);
+    }
     wilderness.weather = generateWeather(wilderness.climate);
 
     const encounterMsg = maybeGenerateEncounter(finalHex);
@@ -338,7 +438,12 @@ export function forageCurrentHex() {
     const wilderness = state.wilderness;
     const currentHex = sanitizeHex(wilderness.map[keyFromPos(wilderness.currentPos)]);
     if (!currentHex) return;
-    consumeDailySupplies(wilderness);
+    // Advance calendar directly in the same updateState transaction
+    const calendar = state.calendar;
+    const before = describeClock(calendar.clock);
+    advanceClock(calendar.clock, "hour", 2);
+    const after = describeClock(calendar.clock);
+    addCalendarLog(calendar, `Time passed: +2 hours`, `${before} → ${after}`);
     const terrain = TERRAIN_DATA[currentHex.type];
     const roll = randomRange(1, 6);
     if (roll <= terrain.forage) {
@@ -400,6 +505,8 @@ export function exportWildernessData(): string {
     climate: state.climate,
     weather: state.weather,
     log: state.log,
+    staticMapMode: state.staticMapMode,
+    staticMapData: state.staticMapData,
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -432,12 +539,22 @@ export function importWildernessData(raw: string) {
     state.wilderness.climate = payload.climate ?? state.wilderness.climate;
     state.wilderness.weather = payload.weather ?? state.wilderness.weather ?? generateWeather(state.wilderness.climate);
     state.wilderness.log = Array.isArray(payload.log) ? payload.log : [];
+    state.wilderness.staticMapMode = payload.staticMapMode ?? false;
+    state.wilderness.staticMapData = payload.staticMapData;
   });
 }
 
 function ensureHex(state: WildernessState, q: number, r: number, fromType: WildernessTerrainType): WildernessHex {
   const map = ensureMap(state);
   const key = `${q},${r}`;
+
+  // Check for static map data first if in static mode
+  if (state.staticMapMode && state.staticMapData && state.staticMapData[key]) {
+    const staticHex = { ...state.staticMapData[key], visited: true };
+    map[key] = staticHex;
+    return staticHex;
+  }
+
   if (map[key]) {
     map[key] = sanitizeHex(map[key]);
     map[key]!.visited = true;
@@ -551,12 +668,22 @@ function resolveMovement(
   return { nextPos, lostMessage };
 }
 
-function spendMovementPoints(state: WildernessState, cost: number) {
+function spendMovementPoints(state: WildernessState, cost: number): number {
   state.movementPoints -= cost;
+
+  // Calculate hours spent traveling based on miles
+  // Assuming 8 hours of travel per day for 24 miles
+  const hoursSpentTraveling = (cost / state.maxMovementPoints) * 8;
+
+  let daysAdvanced = 0;
   while (state.movementPoints <= 0) {
     consumeDailySupplies(state);
     state.movementPoints += state.maxMovementPoints;
+    daysAdvanced += 1;
   }
+
+  // Return total hours spent (travel + any full days)
+  return Math.round(hoursSpentTraveling + (daysAdvanced * 24));
 }
 
 function consumeDailySupplies(state: WildernessState) {
@@ -565,7 +692,7 @@ function consumeDailySupplies(state: WildernessState) {
   const waterNeed = isDesert ? state.partySize * 2 : state.partySize;
 
   state.days += 1;
-  advanceCalendar("day", 1);
+  // Calendar advancement will be handled by the caller in the same updateState transaction
   state.rations = Math.max(0, state.rations - state.partySize);
   state.water = Math.max(0, state.water - waterNeed);
 
@@ -578,11 +705,34 @@ function consumeDailySupplies(state: WildernessState) {
   }
 }
 
+// BECMI Chance of Encounter Table
+// Clear, grasslands, inhabited, settled: 1 on 1d6 (16.7%)
+// Forest, river, hills, barren, desert, ocean: 1-2 on 1d6 (33.3%)
+// Swamp, jungle, mountains: 1-3 on 1d6 (50%)
+function getEncounterChance(terrainType: WildernessTerrainType): number {
+  const normalized = normalizeTerrainType(terrainType);
+  switch (normalized) {
+    case "clear":
+    case "city":
+      return 1; // 1 on 1d6
+    case "woods":
+    case "river":
+    case "hills":
+    case "desert":
+    case "ocean":
+      return 2; // 1-2 on 1d6
+    case "swamp":
+    case "mountain":
+      return 3; // 1-3 on 1d6
+    default:
+      return 1; // Default to clear
+  }
+}
+
 function maybeGenerateEncounter(hex: WildernessHex): string | undefined {
   if (!hex) return undefined;
-  const terrainData = TERRAIN_DATA[normalizeTerrainType(hex.type)];
-  if (!terrainData) return undefined;
-  if (randomRange(1, 6) > terrainData.encounter) {
+  const encounterChance = getEncounterChance(hex.type);
+  if (randomRange(1, 6) > encounterChance) {
     return undefined;
   }
   return generateEncounter(hex.type);
@@ -590,12 +740,147 @@ function maybeGenerateEncounter(hex: WildernessHex): string | undefined {
 
 function generateEncounter(type: WildernessTerrainType): string {
   const normalized = normalizeTerrainType(type);
-  const categories = TERRAIN_TABLES[normalized] ?? [];
-  const categoryName = categories[randomRange(0, categories.length - 1)] ?? "Men";
-  const table = ENCOUNTER_DATA[categoryName.toLowerCase()] ?? ENCOUNTER_DATA.unusual;
-  const encounter = table[randomRange(0, table.length - 1)];
+  const terrainGroup = TERRAIN_GROUPINGS[normalized] || "Clear";
+
+  // Roll 1d8 on main table to determine subtable
+  const mainRoll = randomRange(1, 8);
+  const subtableName = MAIN_ENCOUNTER_TABLE[mainRoll];
+
+  // Get the appropriate subtable based on main roll and terrain
+  const { categoryName, encounter } = rollOnSubtable(subtableName, terrainGroup);
   const qty = rollDice(encounter.qty);
-  return `ENCOUNTER: ${qty} ${encounter.name} (${categoryName})`;
+
+  // Check for surprise (simplified - could be expanded with actual surprise mechanics)
+  const isSurprised = randomRange(1, 6) <= 2; // 33% chance of surprise for now
+
+  // Calculate encounter distance based on lighting conditions and surprise
+  const distance = calculateEncounterDistance(isSurprised);
+
+  const surpriseText = isSurprised ? " (Surprised!)" : "";
+  const treasureText = encounter.treasure && encounter.treasure !== "Nil" ?
+    ` [Treasure: ${encounter.treasure}]` : "";
+
+  return `ENCOUNTER: ${qty} ${encounter.name} (${categoryName}) - ${distance} yards away${surpriseText}${treasureText}`;
+}
+
+function rollOnSubtable(subtableName: string, terrainGroup: string): { categoryName: string; encounter: { name: string; qty: string } } {
+  let tableKey: string;
+  let roll: number;
+
+  // Handle terrain-specific subtable variations from BECMI main table
+  switch (subtableName) {
+    case "Human":
+      tableKey = "menus";
+      roll = randomRange(1, 12);
+      break;
+
+    case "Humanoid":
+      tableKey = "humanoid";
+      roll = randomRange(1, 12);
+      break;
+
+    case "Animal":
+      tableKey = "animal";
+      roll = randomRange(1, 12);
+      break;
+
+    case "Unusual":
+      tableKey = "unusual";
+      roll = randomRange(1, 12);
+      break;
+
+    case "Dragon":
+      tableKey = "dragon";
+      roll = randomRange(1, 12);
+      break;
+
+    case "Insect":
+      // Insect encounters use the unusual table in BECMI
+      tableKey = "unusual";
+      roll = randomRange(1, 12);
+      break;
+
+    case "Special":
+      if (terrainGroup === "City") {
+        // City special encounters - for now use humans, but should be city-specific
+        tableKey = "menus";
+        roll = randomRange(1, 12);
+      } else {
+        tableKey = "menus"; // Fallback
+        roll = randomRange(1, 12);
+      }
+      break;
+
+    default:
+      tableKey = "menus";
+      roll = randomRange(1, 12);
+  }
+
+  const table = ENCOUNTER_DATA[tableKey.toLowerCase()] ?? ENCOUNTER_DATA.menus;
+  const encounter = table[roll - 1] ?? table[0];
+
+  return { categoryName: tableKey, encounter };
+}
+
+function getLightCondition(): LightCondition {
+  // Import calendar state to check time of day
+  const calendarState = getState().calendar;
+  const hour = calendarState.clock.hour;
+
+  // Clear daylight: 8 AM - 6 PM (hours 8-17, 10 hours)
+  if (hour >= 8 && hour <= 17) {
+    return "clear_daylight";
+  }
+
+  // Dim light: 2 hours morning (6-8 AM) and 2 hours evening (6-8 PM)
+  if ((hour >= 6 && hour <= 7) || (hour >= 18 && hour <= 19)) {
+    return "dim_light";
+  }
+
+  // No light: Full night 8 PM - 6 AM (hours 20-23, 0-5)
+  // Check moon phase - full moon provides dim light even at night
+  const moonPhase = getCalendarMoonPhase(calendarState.clock);
+  const isFullMoon = moonPhase === "Full Moon";
+
+  if (hour >= 20 || hour <= 5) {
+    // Full moon provides dim light
+    if (isFullMoon) {
+      return "dim_light";
+    }
+    // Otherwise no light
+    return "no_light";
+  }
+
+  // Default fallback
+  return "dim_light";
+}
+
+function calculateEncounterDistance(isSurprised: boolean = false): number {
+  // If surprised, always use 1d4 × 10 yards (or half, depending on surprise)
+  if (isSurprised) {
+    return rollDice("1d4") * 10;
+  }
+
+  const lightCondition = getLightCondition();
+
+  let distance: number;
+  switch (lightCondition) {
+    case "clear_daylight":
+      // 4d6 × 10 yards
+      distance = rollDice("4d6") * 10;
+      break;
+    case "dim_light":
+      // 2d6 × 10 yards
+      distance = rollDice("2d6") * 10;
+      break;
+    case "no_light":
+    default:
+      // 1d4 × 10 yards
+      distance = rollDice("1d4") * 10;
+      break;
+  }
+
+  return distance;
 }
 
 function generateSettlement() {
@@ -728,5 +1013,64 @@ function sanitizeHex(hex?: WildernessHex): WildernessHex {
     color: hex.color ?? TERRAIN_DATA[normalizedType].color,
   };
 }
+
+export function setStaticMapMode(enabled: boolean) {
+  updateState((state) => {
+    state.wilderness.staticMapMode = enabled;
+  });
+}
+
+// Helper function to convert Python BECMI terrain to Wilderness terrain
+function convertPythonTerrain(pythonTerrain: string): WildernessTerrainType {
+  return PYTHON_TO_WILDERNESS_TERRAIN[pythonTerrain] || "clear";
+}
+
+export function loadStaticMapFromJSON(jsonData: string): void {
+  try {
+    const data = JSON.parse(jsonData);
+
+    if (!Array.isArray(data)) {
+      throw new Error("Invalid static map format: expected array of hex data");
+    }
+
+    const staticMap: Record<string, WildernessHex> = {};
+
+    data.forEach((hex: any) => {
+      if (!hex.x || !hex.y || !hex.terrain) {
+        return; // Skip invalid entries
+      }
+
+      const key = `${hex.x},${hex.y}`;
+      const wildernessTerrain = convertPythonTerrain(hex.terrain);
+
+      staticMap[key] = {
+        type: wildernessTerrain,
+        resources: [],
+        visited: false, // Static map starts unvisited
+        color: TERRAIN_DATA[wildernessTerrain].color,
+        // Add feature for rivers/lakes
+        feature: hex.is_river ? "River" : hex.is_lake ? "Lake" : undefined,
+        details: hex.is_river ? "Fresh water source" : hex.is_lake ? "Standing water" : undefined,
+      };
+    });
+
+    updateState((state) => {
+      state.wilderness.staticMapData = staticMap;
+      state.wilderness.staticMapMode = true;
+    });
+
+  } catch (error) {
+    throw new Error(`Failed to parse static map JSON: ${(error as Error).message}`);
+  }
+}
+
+export function unloadStaticMap(): void {
+  updateState((state) => {
+    state.wilderness.staticMapMode = false;
+    state.wilderness.staticMapData = undefined;
+  });
+}
+
+export { getLightCondition, type LightCondition };
 
 

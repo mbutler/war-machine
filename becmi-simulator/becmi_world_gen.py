@@ -468,6 +468,34 @@ class WorldGenerator:
         except sqlite3.Error as e:
             print(f"Database Error: {e}")
 
+    def export_json(self, filename: str):
+        """Exports the world data as JSON compatible with the wilderness system."""
+        print(f"Exporting JSON data to {filename}...")
+
+        # Convert grid to JSON format
+        hex_data = []
+        for row in self.grid:
+            for hex in row:
+                hex_dict = {
+                    "x": hex.x,
+                    "y": hex.y,
+                    "terrain": hex.terrain.value,
+                    "elevation": hex.elevation,
+                    "moisture": hex.moisture,
+                    "is_river": hex.is_river,
+                    "is_lake": hex.is_lake,
+                    "road_level": hex.road_level,
+                }
+                hex_data.append(hex_dict)
+
+        try:
+            import json
+            with open(filename, "w", encoding="utf-8") as json_file:
+                json.dump(hex_data, json_file, indent=2)
+            print(f"JSON export complete: {len(hex_data)} hexes saved.")
+        except Exception as e:
+            print(f"JSON Export Error: {e}")
+
     def render_ascii_map(self, slice_width=80, slice_height=40, use_color=True, to_file=None):
         """Print an ASCII map preview or the full map.
 
@@ -590,6 +618,11 @@ if __name__ == "__main__":
         help="Write the ASCII map (without colors) to the given file path."
     )
     parser.add_argument(
+        "--json-output",
+        type=str,
+        help="Write the hex data as JSON (compatible with wilderness system) to the given file path."
+    )
+    parser.add_argument(
         "--no-color",
         action="store_true",
         help="Disable ANSI colors in the ASCII map output."
@@ -630,3 +663,7 @@ if __name__ == "__main__":
 
     # 6. Export Data to SQLite
     world.save_to_db()
+
+    # 7. Export JSON for Wilderness System (if requested)
+    if args.json_output:
+        world.export_json(args.json_output)

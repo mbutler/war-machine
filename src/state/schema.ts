@@ -225,6 +225,8 @@ export interface WildernessState {
     precipitation: string;
   };
   log: WildernessLogEntry[];
+  staticMapMode: boolean;
+  staticMapData?: Record<string, WildernessHex>;
 }
 
 export interface CalendarEvent {
@@ -556,6 +558,7 @@ export interface DungeonState {
   turn: number;
   depth: number;
   torches: number;
+  torchTurnsUsed: number; // Tracks turns used on current torch (0-5)
   rations: number;
   loot: number;
   bankedGold: number;
@@ -718,6 +721,7 @@ export const DEFAULT_STATE: WarMachineState = {
       bankedGold: 0,
       loot: 0,
       torches: 0,
+      torchTurnsUsed: 0,
       rations: 0,
     },
   },
@@ -775,6 +779,7 @@ export const DEFAULT_STATE: WarMachineState = {
       precipitation: "None",
     },
     log: [],
+    staticMapMode: false,
   },
   calendar: {
     clock: {
@@ -800,6 +805,7 @@ export const DEFAULT_STATE: WarMachineState = {
     turn: 0,
     depth: 1,
     torches: 6,
+    torchTurnsUsed: 0,
     rations: 7,
     loot: 0,
     bankedGold: 0,

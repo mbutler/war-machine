@@ -111,12 +111,23 @@ onCalendarEvent((event) => {
   if (event.type !== "timers-expired") {
     return;
   }
-  const ids = new Set(event.trackers.filter((tracker) => tracker.kind === "dominion").map((tracker) => tracker.id));
-  if (!ids.size) {
+  const dominionTrackers = event.trackers.filter((tracker) => tracker.kind === "dominion");
+  if (!dominionTrackers.length) {
     return;
   }
+
+  // Automatically process the next dominion season when current season expires
+  try {
+    const logEntry = processDominionSeason();
+    console.log("Automatically processed dominion season:", logEntry.season);
+  } catch (error) {
+    console.error("Failed to auto-process dominion season:", error);
+  }
+
+  // Clear the expired tracker
   updateState((state) => {
-    if (state.dominion.activeTrackerId && ids.has(state.dominion.activeTrackerId)) {
+    const expiredIds = new Set(dominionTrackers.map((tracker) => tracker.id));
+    if (state.dominion.activeTrackerId && expiredIds.has(state.dominion.activeTrackerId)) {
       state.dominion.activeTrackerId = null;
     }
   });
