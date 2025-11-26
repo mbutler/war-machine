@@ -43,10 +43,9 @@ export function toggleLairMode(enabled: boolean) {
 }
 
 export function exploreRoom() {
-  let turnsSpent = 0;
   updateState((state) => {
     const dungeon = state.dungeon;
-    turnsSpent = advanceTurn(dungeon);
+    const turnsSpent = advanceTurn(dungeon);
 
     const encounterRoll = rollDie(20);
     const definition = pickEncounter(dungeon.depth, encounterRoll);
@@ -64,8 +63,9 @@ export function exploreRoom() {
       dungeon.encounter = undefined;
       addLogEntry(dungeon, "event", `Obstacle: ${obstacle.name}`, obstacle.description);
     }
+
+    syncCalendarTurns(turnsSpent);
   });
-  syncCalendarTurns(turnsSpent);
 }
 
 export function resolveObstacle(strategy: "force" | "careful") {
@@ -88,24 +88,202 @@ export function resolveEncounter(outcome: "fight" | "parley" | "flee") {
     const dungeon = state.dungeon;
     const encounter = dungeon.encounter;
     if (!encounter) return;
-    let summary = "";
+
     if (outcome === "fight") {
-      summary = `Defeated ${encounter.name}`;
-      dungeon.loot += Math.round(encounter.hitDice * 10);
-      dungeon.status = "loot";
-      addLogEntry(dungeon, "combat", summary);
-      return;
+      performCombatRound(dungeon, state.party.roster, false);
     } else if (outcome === "parley") {
-      summary = `Parleyed with ${encounter.name}`;
-      dungeon.status = "idle";
-      dungeon.encounter = undefined;
-    } else {
-      summary = `Fled from ${encounter.name}`;
-      dungeon.status = "idle";
-      dungeon.encounter = undefined;
+      if (encounter.reaction === "hostile") {
+        addLogEntry(dungeon, "combat", "Parley failed - they attack!", "The monsters ignore your words and charge!");
+        performCombatRound(dungeon, state.party.roster, false);
+      } else {
+        addLogEntry(dungeon, "combat", "Parley successful", `You convince the ${encounter.name} to leave peacefully.`);
+        dungeon.status = "idle";
+        dungeon.encounter = undefined;
+      }
+    } else if (outcome === "flee") {
+      addLogEntry(dungeon, "combat", "Attempting to flee", "You turn and run from combat!");
+      performCombatRound(dungeon, state.party.roster, true);
+      // If still in combat after the round, fleeing failed
+      if (dungeon.encounter && dungeon.status === "encounter") {
+        addLogEntry(dungeon, "combat", "Flee failed", "The monsters catch up to you!");
+      }
     }
-    addLogEntry(dungeon, "combat", summary);
   });
+}
+
+function performCombatRound(dungeon: typeof DEFAULT_STATE.dungeon, party: any[], fleeing: boolean = false) {
+  if (!dungeon.encounter) return;
+
+  const encounter = dungeon.encounter;
+
+  // If monsters are already defeated, immediately declare victory
+  if (encounter.hp <= 0) {
+    addLogEntry(dungeon, "combat", "Victory!", `The ${encounter.name} were already defeated!`);
+    dungeon.status = "loot";
+    return;
+  }
+
+  // Filter to only living characters
+  const livingParty = party.filter(char => char.derivedStats.hp.current > 0);
+
+  // Initiative
+  const partyInit = rollDie(6);
+  const monsterInit = rollDie(6);
+  const partyGoesFirst = partyInit >= monsterInit;
+
+  addLogEntry(dungeon, "combat", `Initiative: Party ${partyInit}, Monsters ${monsterInit}`, partyGoesFirst ? "Party acts first!" : "Monsters act first!");
+
+  // Combat resolution
+  if (partyGoesFirst && !fleeing) {
+    resolvePartyAttacks(dungeon, livingParty, fleeing);
+  }
+  if (encounter.hp > 0) {
+    resolveMonsterAttacks(dungeon, livingParty, fleeing);
+  }
+  if (!partyGoesFirst && !fleeing && encounter.hp > 0) {
+    resolvePartyAttacks(dungeon, livingParty, fleeing);
+  }
+
+  // If fleeing, party gets away if they survive the attacks
+  if (fleeing) {
+    const stillLiving = livingParty.filter(char => char.derivedStats.hp.current > 0);
+    if (stillLiving.length > 0) {
+      addLogEntry(dungeon, "combat", "Escape successful!", "You got away from the monsters!");
+      dungeon.status = "idle";
+      dungeon.encounter = undefined;
+      return;
+    }
+  }
+
+
+  // Check if monsters are defeated
+  if (encounter.hp <= 0) {
+    console.log("Monsters defeated!");
+    addLogEntry(dungeon, "combat", "Victory!", `The ${encounter.name} have been defeated!`);
+    dungeon.status = "loot";
+    return;
+  }
+
+  // Check if party is wiped out
+  const stillLiving = livingParty.filter(char => char.derivedStats.hp.current > 0);
+  if (stillLiving.length === 0) {
+    console.log("Party wiped out!");
+    addLogEntry(dungeon, "combat", "Party Wiped Out!", "All party members have fallen!");
+    dungeon.status = "idle";
+    dungeon.encounter = undefined;
+    return;
+  }
+
+  // Combat continues to next round
+}
+
+function resolvePartyAttacks(dungeon: typeof DEFAULT_STATE.dungeon, party: any[], fleeing: boolean) {
+  if (fleeing || !dungeon.encounter) return;
+
+  const encounter = dungeon.encounter;
+  let totalDamage = 0;
+
+  party.forEach(char => {
+    if (char.derivedStats.hp.current <= 0) return;
+
+    // Calculate attack roll using THAC0
+    const attackRoll = rollDie(20);
+    const targetAC = encounter.armorClass;
+    const requiredRoll = char.derivedStats.thac0 - targetAC;
+
+    if (attackRoll >= requiredRoll) {
+      // Use weapon damage (simplified to 1d6 for now)
+      const damage = rollDie(6);
+      totalDamage += damage;
+      addLogEntry(dungeon, "combat", `${char.name} hits!`, `Deals ${damage} damage to ${encounter.name}`);
+    } else {
+      addLogEntry(dungeon, "combat", `${char.name} misses`, `Attack roll: ${attackRoll} (needed ${requiredRoll}+)`);
+    }
+  });
+
+  if (totalDamage > 0) {
+    encounter.hp = Math.max(0, encounter.hp - totalDamage);
+    addLogEntry(dungeon, "combat", `Party deals ${totalDamage} total damage`, `${encounter.name} has ${encounter.hp} HP remaining`);
+
+    // Check morale conditions
+    const hpPerMonster = Math.max(1, Math.round(encounter.hitDice * 8)); // Rough estimate
+
+    // 1. First Death? (Damage > 1 monster HP)
+    if (!encounter.checkedFirstDeath && totalDamage >= hpPerMonster) {
+      encounter.checkedFirstDeath = true;
+      checkMonsterMorale(dungeon);
+      if (dungeon.status !== "encounter") return; // Morale failed
+    }
+
+    // 2. Half Strength?
+    if (!encounter.checkedHalf && encounter.hp <= (encounter.hpMax / 2)) {
+      encounter.checkedHalf = true;
+      checkMonsterMorale(dungeon);
+      if (dungeon.status !== "encounter") return; // Morale failed
+    }
+  }
+}
+
+function resolveMonsterAttacks(dungeon: typeof DEFAULT_STATE.dungeon, party: any[], fleeing: boolean) {
+  if (!dungeon.encounter) return;
+
+  const encounter = dungeon.encounter;
+  const hitBonus = fleeing ? 2 : 0; // Bonus to hit fleeing targets
+
+  // Calculate active monster count (based on remaining HP)
+  const hpPerMonster = Math.max(1, Math.round(encounter.hitDice * 8)); // Rough estimate
+  const activeCount = Math.max(1, Math.ceil(encounter.hp / hpPerMonster));
+
+  addLogEntry(dungeon, "combat", `Monster attacks`, `${activeCount} ${encounter.name} attack!`);
+
+  // Each active monster attacks
+  for (let i = 0; i < activeCount; i++) {
+    // Select random target
+    const livingTargets = party.filter(char => char.derivedStats.hp.current > 0);
+    if (livingTargets.length === 0) break;
+
+    const target = livingTargets[Math.floor(Math.random() * livingTargets.length)];
+    const attackRoll = rollDie(20) + hitBonus;
+
+    // Monster THAC0 calculation (simplified)
+    const monsterTHAC0 = 19 - (encounter.hitDice * 2); // Rough approximation
+    const requiredRoll = monsterTHAC0 - target.derivedStats.ac;
+
+    if (attackRoll >= requiredRoll) {
+      const damage = rollFormula(encounter.damage);
+      const newHp = Math.max(0, target.derivedStats.hp.current - damage);
+      target.derivedStats.hp.current = newHp;
+
+      if (newHp <= 0) {
+        addLogEntry(dungeon, "combat", `${target.name} falls!`, `Hit by ${encounter.name} for ${damage} damage`);
+        target.status = "dead";
+      } else {
+        addLogEntry(dungeon, "combat", `${target.name} hit!`, `Takes ${damage} damage from ${encounter.name}`);
+      }
+    } else {
+      addLogEntry(dungeon, "combat", `${encounter.name} misses ${target.name}`, `Attack roll: ${attackRoll} (needed ${requiredRoll}+)`);
+    }
+  }
+}
+
+function checkMonsterMorale(dungeon: typeof DEFAULT_STATE.dungeon) {
+  if (!dungeon.encounter) return;
+
+  const encounter = dungeon.encounter;
+  const moraleRoll = rollDie(6) + rollDie(6);
+
+  // Check morale conditions
+  const hpPercent = (encounter.hp / encounter.hpMax) * 100;
+  let moraleModifier = 0;
+
+  if (hpPercent <= 50) moraleModifier += 2; // Half strength or less
+  // Could add more morale modifiers here
+
+  if (moraleRoll + moraleModifier > encounter.morale) {
+    addLogEntry(dungeon, "combat", "Morale check failed!", `${encounter.name} flee in panic! (Rolled ${moraleRoll}+${moraleModifier} vs ${encounter.morale})`);
+    dungeon.status = "idle";
+    dungeon.encounter = undefined;
+  }
 }
 
 export function searchRoom() {

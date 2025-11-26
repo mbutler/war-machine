@@ -534,6 +534,8 @@ export interface DungeonEncounter {
   reaction: "hostile" | "neutral" | "friendly";
   spellsCasterIds?: string[];
   moraleCheck?: boolean;
+  checkedFirstDeath?: boolean;
+  checkedHalf?: boolean;
 }
 
 export interface DungeonObstacle {

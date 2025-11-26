@@ -139,15 +139,17 @@ function renderControls(container: HTMLElement, dungeon = getDungeonState(), par
   const actionButtons = document.createElement("div");
   actionButtons.className = "flex flex-col gap-sm";
 
-  actionButtons.append(
-    makeButton("Explore New Room", "button", () => exploreRoom()),
-    makeButton("Search the Area", "button", () => searchRoom()),
-    makeButton("Rest & Eat", "button", () => restParty()),
-  );
+  if (dungeon.status === "idle") {
+    actionButtons.append(
+      makeButton("Explore New Room", "button", () => exploreRoom()),
+      makeButton("Search the Area", "button", () => searchRoom()),
+      makeButton("Rest & Eat", "button", () => restParty()),
+    );
+  }
 
   container.appendChild(actionButtons);
 
-  if (dungeon.status === "encounter" && dungeon.encounter) {
+  if ((dungeon.status === "encounter" || dungeon.status === "loot") && dungeon.encounter) {
     container.appendChild(renderEncounterPanel(dungeon, party));
   } else if (dungeon.status === "obstacle" && dungeon.obstacle) {
     const obstaclePanel = document.createElement("div");
@@ -212,6 +214,7 @@ function renderLog(container: HTMLElement, log: DungeonLogEntry[] = []) {
       detail.textContent = entry.detail;
       item.appendChild(detail);
     }
+    container.appendChild(item);
   });
 
   const clearBtn = document.createElement("button");
@@ -357,11 +360,14 @@ function renderEncounterPanel(dungeon = getDungeonState(), party = getPartyState
   dmgInput.className = "input";
   dmgInput.min = "1";
   dmgInput.value = "4";
+  dmgInput.placeholder = "Damage";
   dmgRow.appendChild(dmgInput);
   dmgRow.appendChild(
     makeButton("Apply Damage", "button", () => {
       const amount = Number(dmgInput.value) || 0;
-      if (amount > 0) applyEncounterDamage(amount);
+      if (amount > 0) {
+        applyEncounterDamage(amount);
+      }
     }),
   );
   panel.appendChild(dmgRow);
