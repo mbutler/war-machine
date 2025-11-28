@@ -2,17 +2,28 @@ import type {
   DominionEventType,
   DominionLogEntry,
   DominionResource,
+  DominionResourceType,
   DominionSeason,
   DominionState,
   DominionTurnSettings,
 } from "../state/schema";
 import { createId } from "../utils/id";
 
-const STD_TAX_MIN = 10;
-const STD_TAX_MAX = 20;
+// BECMI Constants
+const STANDARD_INCOME_PER_FAMILY = 10; // Fixed 10 gp per family (services, not cash)
+const NORMAL_TAX_RATE = 1;             // Normal tax is 1 gp per family
+const LOW_TAX_THRESHOLD = 1;           // Below this = confidence bonus
+const HIGH_TAX_THRESHOLD = 3;          // Above this = confidence penalty
 const MAX_HEX_POP = 500;
 const MIN_CONFIDENCE = 0;
 const MAX_CONFIDENCE = 500;
+
+// BECMI Resource Values (per peasant family)
+const RESOURCE_VALUE_PER_FAMILY: Record<DominionResourceType, number> = {
+  Animal: 2,    // Livestock, hunting, etc.
+  Vegetable: 1, // Crops, timber, etc.
+  Mineral: 3,   // Mining, quarrying, etc.
+};
 
 const EVENT_CONFIDENCE: Record<Exclude<DominionEventType, "random">, number> = {
   none: 0,
@@ -23,13 +34,24 @@ const EVENT_CONFIDENCE: Record<Exclude<DominionEventType, "random">, number> = {
 };
 
 export interface DominionProjection {
-  grossIncome: number;
+  // BECMI Income Breakdown
+  standardIncome: number;  // Fixed 10 gp × families (services)
+  resourceIncome: number;  // Based on resource types × families
+  taxIncome: number;       // Variable tax rate × families
+  grossIncome: number;     // Total of all three
+  
+  // Deductions and Net
+  tithe: number;
   netIncome: number;
+  
+  // Confidence
   confidenceDelta: number;
   finalConfidence: number;
   eventLabel: string;
   eventDelta: number;
   factors: string[];
+  
+  // Population & Treasury
   populationDelta: number;
   familiesAfter: number;
   treasuryAfter: number;
@@ -39,8 +61,19 @@ export interface ProcessDominionResult extends DominionProjection {
   logEntry: DominionLogEntry;
 }
 
-function sumResourceValue(resources: DominionResource[]): number {
-  return resources.reduce((total, resource) => total + Number(resource.value || 0), 0);
+/**
+ * Calculate total resource value per family based on BECMI rules.
+ * Each resource type has a fixed value: Animal=2, Vegetable=1, Mineral=3
+ * Multiple resources of the same type stack.
+ */
+function calculateResourceValuePerFamily(resources: DominionResource[]): number {
+  return resources.reduce((total, resource) => {
+    // Use BECMI fixed values, but allow override via resource.value if set > 0
+    const baseValue = RESOURCE_VALUE_PER_FAMILY[resource.type] ?? 0;
+    const customValue = Number(resource.value || 0);
+    // If custom value is set and differs from base, use custom; otherwise use BECMI base
+    return total + (customValue > 0 ? customValue : baseValue);
+  }, 0);
 }
 
 function hasAllResourceTypes(resources: DominionResource[]): boolean {
@@ -102,20 +135,40 @@ export function projectDominionTurn(
   options?: { eventRoll?: number },
 ): DominionProjection {
   const population = Math.max(0, state.families);
-  const resourceValue = sumResourceValue(state.resources);
-  const grossIncome = population * (turn.taxRate + resourceValue);
+  
+  // BECMI Income Calculation (three separate streams)
+  // 1. Standard Income: Fixed 10 gp per family (services, not cash)
+  const standardIncome = population * STANDARD_INCOME_PER_FAMILY;
+  
+  // 2. Resource Income: Based on resource types (Animal=2, Vegetable=1, Mineral=3)
+  const resourceValuePerFamily = calculateResourceValuePerFamily(state.resources);
+  const resourceIncome = population * resourceValuePerFamily;
+  
+  // 3. Tax Income: Variable rate (default 1 gp, adjustable)
+  const taxIncome = population * turn.taxRate;
+  
+  // Total gross income
+  const grossIncome = standardIncome + resourceIncome + taxIncome;
+  
+  // Calculate tithe on gross income
   const tithe = Math.floor(grossIncome * (turn.tithePercent / 100));
+  
+  // Net income after all deductions
   const netIncome = grossIncome - turn.expenses - tithe - turn.holidaySpending;
 
   let confidenceDelta = 0;
   const factors: string[] = [];
 
-  if (turn.taxRate < STD_TAX_MIN) {
-    const gain = STD_TAX_MIN - turn.taxRate;
-    confidenceDelta += gain;
-    factors.push(`Low Tax (+${gain})`);
-  } else if (turn.taxRate > STD_TAX_MAX) {
-    const loss = turn.taxRate - STD_TAX_MAX;
+  // BECMI Confidence: Tax rate affects peasant happiness
+  // Normal tax is 1 gp/family. Lower = happier, higher = discontent
+  if (turn.taxRate < LOW_TAX_THRESHOLD) {
+    const gain = Math.round((LOW_TAX_THRESHOLD - turn.taxRate) * 5);
+    if (gain > 0) {
+      confidenceDelta += gain;
+      factors.push(`Low Tax (+${gain})`);
+    }
+  } else if (turn.taxRate > HIGH_TAX_THRESHOLD) {
+    const loss = Math.round((turn.taxRate - HIGH_TAX_THRESHOLD) * 5);
     confidenceDelta -= loss;
     factors.push(`High Tax (-${loss})`);
   }
@@ -167,13 +220,24 @@ export function projectDominionTurn(
   const treasuryAfter = state.treasury + netIncome;
 
   return {
+    // BECMI Income Breakdown
+    standardIncome,
+    resourceIncome,
+    taxIncome,
     grossIncome,
+    
+    // Deductions
+    tithe,
     netIncome,
+    
+    // Confidence
     confidenceDelta,
     finalConfidence,
     eventLabel,
     eventDelta,
     factors,
+    
+    // Population & Treasury
     populationDelta,
     familiesAfter,
     treasuryAfter,

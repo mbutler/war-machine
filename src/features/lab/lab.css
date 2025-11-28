@@ -53,12 +53,25 @@
   gap: 0.3rem;
 }
 
-.lab-formula-field {
+.lab-formula-field,
+.lab-components-field,
+.lab-spell-type-field {
   align-items: flex-start;
 }
 
 .lab-checkbox {
   width: auto;
+}
+
+.lab-components-field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lab-components-field .button {
+  flex-shrink: 0;
 }
 
 .lab-actions {
@@ -163,7 +176,7 @@
   margin-top: 0.35rem;
 }
 
-.lab-library-info {
+.lab-requirements-info {
   font-size: 0.75rem;
   color: var(--text-muted);
 }

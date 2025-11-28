@@ -55,6 +55,15 @@ export function updateLabWorkbench<K extends keyof LabState["workbench"]>(
   });
 }
 
+export function acquireComponents(): { success: boolean; error?: string } {
+  // In a real implementation, this might cost gold or require an adventure
+  // For now, it's a simple toggle
+  mutateLab((draft) => {
+    draft.workbench.hasComponents = true;
+  });
+  return { success: true };
+}
+
 export function investInLibrary(amount = 1000): { success: boolean; error?: string } {
   const state = getLabState();
   if (amount <= 0) {
@@ -80,12 +89,10 @@ export function attemptExperiment(): ExperimentResult {
   if (state.resources.gold < calc.cost) {
     return { success: false, error: "Insufficient gold for this experiment." };
   }
-  if (!calc.libraryOk) {
-    return { success: false, error: "Library value is below the required threshold." };
+  if (!calc.componentsOk && calc.componentsRequired) {
+    return { success: false, error: "Rare spell components required but not acquired." };
   }
-  if (calc.mode === "item" && !state.workbench.hasFormula) {
-    return { success: false, error: "Item creation requires a researched formula." };
-  }
+  // No additional validation needed for spell research - requirements are checked in chance calculation
 
   const roll = Math.floor(Math.random() * 100) + 1;
   const success = roll <= calc.chance;
@@ -105,8 +112,8 @@ export function attemptExperiment(): ExperimentResult {
   });
 
   const trackerLabel =
-    calc.mode === "formula"
-      ? `Lab: Formula Research (${calc.timeWeeks} wk)`
+    calc.mode === "spell"
+      ? `Lab: Spell Research (${calc.timeWeeks} wk)`
       : `Lab: ${getLabItemLabel(state.workbench.itemType)} (${calc.timeWeeks} wk)`;
   const tracker = startTimedAction({
     name: trackerLabel,
@@ -136,14 +143,14 @@ function buildLogEntry({
   outcome: "success" | "fail";
 }) {
   const itemLabel = getLabItemLabel(state.workbench.itemType);
-  const action = calc.mode === "formula" ? "Formula" : itemLabel;
+  const action = calc.mode === "spell" ? "Spell Research" : itemLabel;
   const title =
     outcome === "success"
-      ? calc.mode === "formula"
-        ? "Formula Discovered"
+      ? calc.mode === "spell"
+        ? "Spell Researched"
         : `${itemLabel} Created`
-      : calc.mode === "formula"
-        ? "Research Failed"
+      : calc.mode === "spell"
+        ? "Spell Research Failed"
         : `${itemLabel} Failed`;
 
   let description = `${action} attempt used ${calc.timeWeeks} week(s) and ${calc.cost.toLocaleString()} gp.`;

@@ -5,7 +5,7 @@ import { GenerateCharacterOptions, GenerationMethod, generateCharacter } from ".
 import { RETAINER_TYPES, generateRetainer } from "./retainers";
 import { calculatePartySnapshot } from "./resources";
 import { createId } from "../../utils/id";
-import { recordIncome, setLedgerBalance } from "../ledger/state";
+import { recordIncome, setLedgerBalance, addRecurringExpense, removeRecurringExpense } from "../ledger/state";
 
 export interface PartyGenerationRequest {
   size: number;
@@ -49,9 +49,10 @@ export function generateParty(request: PartyGenerationRequest) {
     };
     refreshPartyResources(state.party);
 
-    // Reset ledger and add starting gold
+    // Reset ledger completely (including recurring expenses - old retainers are gone)
     state.ledger.balance = 0;
     state.ledger.transactions = [];
+    state.ledger.recurringExpenses = [];
   });
 
   // Record starting gold in the ledger (outside updateState to avoid nested calls)
@@ -66,6 +67,8 @@ export function generateParty(request: PartyGenerationRequest) {
 }
 
 export function addRetainerToCharacter(characterId: string, typeId: string) {
+  let retainerToAdd: Retainer | null = null;
+
   updateState((state) => {
     const character = state.party.roster.find((entry) => entry.id === characterId);
     if (!character) return;
@@ -77,26 +80,84 @@ export function addRetainerToCharacter(characterId: string, typeId: string) {
     const retainer = generateRetainer(type);
     character.retainers.push(retainer);
     refreshPartyResources(state.party);
+    retainerToAdd = retainer;
   });
+
+  // Add recurring wage expense (outside updateState to avoid nesting)
+  if (retainerToAdd) {
+    const retainer = retainerToAdd as Retainer;
+    addRecurringExpense({
+      name: `Wages: ${retainer.name} (${retainer.class})`,
+      amount: retainer.wage,
+      frequency: "monthly",
+      source: "party",
+      category: "wage",
+      linkedEntityId: retainer.id,
+      linkedEntityType: "retainer",
+    });
+  }
 }
 
 export function removeRetainer(characterId: string, retainerId: string) {
+  let removedRetainerId: string | null = null;
+
   updateState((state) => {
     const character = state.party.roster.find((entry) => entry.id === characterId);
     if (!character) return;
+    
+    // Check if the retainer exists before removing
+    const retainerExists = character.retainers.some((r) => r.id === retainerId);
+    if (retainerExists) {
+      removedRetainerId = retainerId;
+    }
+    
     character.retainers = character.retainers.filter((retainer) => retainer.id !== retainerId);
     refreshPartyResources(state.party);
   });
+
+  // Remove the recurring wage expense (outside updateState to avoid nesting)
+  if (removedRetainerId) {
+    // Find and remove the recurring expense linked to this retainer
+    const ledgerState = getState().ledger;
+    const expense = ledgerState.recurringExpenses.find(
+      (e) => e.linkedEntityId === removedRetainerId && e.linkedEntityType === "retainer"
+    );
+    if (expense) {
+      removeRecurringExpense(expense.id);
+    }
+  }
 }
 
 export function replaceCharacter(characterId: string, options: GenerateCharacterOptions) {
+  let retainerIdsToRemove: string[] = [];
+
   updateState((state) => {
     const idx = state.party.roster.findIndex((entry) => entry.id === characterId);
     if (idx === -1) return;
+    
+    // Get retainer IDs from the character being replaced
+    const oldCharacter = state.party.roster[idx];
+    if (oldCharacter.retainers.length > 0) {
+      retainerIdsToRemove = oldCharacter.retainers.map((r) => r.id);
+    }
+    
     const replacement = generateCharacter(options);
     state.party.roster[idx] = replacement;
     refreshPartyResources(state.party);
   });
+
+  // Remove recurring wage expenses for old retainers (outside updateState)
+  if (retainerIdsToRemove.length > 0) {
+    const ledgerState = getState().ledger;
+    for (const retainerId of retainerIdsToRemove) {
+      const expense = ledgerState.recurringExpenses.find(
+        (e) => e.linkedEntityId === retainerId && e.linkedEntityType === "retainer"
+      );
+      if (expense) {
+        removeRecurringExpense(expense.id);
+      }
+    }
+  }
 }
 
 export interface PartyExportPayload {

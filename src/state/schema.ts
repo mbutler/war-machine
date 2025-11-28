@@ -476,7 +476,7 @@ export interface TreasureState {
 }
 
 export type LabClass = "mu" | "cleric";
-export type LabMode = "formula" | "item";
+export type LabMode = "spell" | "item";
 export type LabItemType = "scroll" | "potion" | "wand" | "ring" | "weapon" | "construct";
 
 export interface LabCaster {
@@ -496,7 +496,8 @@ export interface LabWorkbench {
   itemType: LabItemType;
   spellLevel: number;
   materialCost: number;
-  hasFormula: boolean;
+  isNewSpell: boolean;
+  hasComponents: boolean;
 }
 
 export interface LabLogEntry {
@@ -720,7 +721,8 @@ const LAB_DEFAULT_STATE: LabState = {
     itemType: "scroll",
     spellLevel: 3,
     materialCost: 1000,
-    hasFormula: false,
+    isNewSpell: false,
+    hasComponents: false,
   },
   log: [],
   activeTrackerId: null,
@@ -857,7 +859,7 @@ export const DEFAULT_STATE: WarMachineState = {
     turn: {
       season: "Spring Start",
       rulerStatus: "present",
-      taxRate: 10,
+      taxRate: 1,  // BECMI default: 1 gp per family (standard income of 10gp is separate)
       holidaySpending: 1000,
       event: "none",
       expenses: 1500,

@@ -4,10 +4,10 @@ import type { LabLogEntry, LabState } from "../../state/schema";
 import { LAB_ITEM_TYPES } from "./constants";
 import { calculateLabExperiment } from "./logic";
 import {
+  acquireComponents,
   attemptExperiment,
   clearLabLog,
   getLabState,
-  investInLibrary,
   resetLabState,
   subscribeToLab,
   updateLabCaster,
@@ -90,36 +90,10 @@ export function renderLabPanel(target: HTMLElement) {
   bindNumberInput(goldInput, (value) => updateLabResources("gold", value), 0);
   resourceForm.appendChild(createField("Gold (gp)", goldInput));
 
-  const libraryInput = createInput("number");
-  libraryInput.min = "0";
-  bindNumberInput(libraryInput, (value) => updateLabResources("libraryValue", value), 0);
-  resourceForm.appendChild(createField("Library Value (gp)", libraryInput));
-
   casterCard.appendChild(resourceForm);
 
   const resourceActions = document.createElement("div");
   resourceActions.className = "lab-actions";
-
-  const investBtn = document.createElement("button");
-  investBtn.type = "button";
-  investBtn.className = "button";
-  investBtn.textContent = "Invest 1,000 gp";
-  investBtn.addEventListener("click", () => {
-    const result = investInLibrary(1000);
-    if (!result.success) {
-      showNotification({
-        title: "Investment failed",
-        message: result.error,
-        variant: "warning",
-      });
-    } else {
-      showNotification({
-        title: "Library expanded",
-        message: "1,000 gp moved from treasury to library.",
-        variant: "success",
-      });
-    }
-  });
 
   const resetBtn = document.createElement("button");
   resetBtn.type = "button";
@@ -131,7 +105,7 @@ export function renderLabPanel(target: HTMLElement) {
     }
   });
 
-  resourceActions.append(investBtn, resetBtn);
+  resourceActions.append(resetBtn);
   casterCard.appendChild(resourceActions);
 
   casterColumn.appendChild(casterCard);
@@ -147,14 +121,14 @@ export function renderLabPanel(target: HTMLElement) {
 
   const modeToggle = document.createElement("div");
   modeToggle.className = "lab-mode-toggle";
-  const formulaOption = createRadioOption("Research Formula", "formula");
+  const spellOption = createRadioOption("Research Spell", "spell");
   const itemOption = createRadioOption("Create Item", "item");
-  modeToggle.append(formulaOption.wrapper, itemOption.wrapper);
+  modeToggle.append(spellOption.wrapper, itemOption.wrapper);
   workbenchCard.appendChild(modeToggle);
 
-  formulaOption.input.addEventListener("change", () => {
-    if (formulaOption.input.checked) {
-      updateLabWorkbench("mode", "formula");
+  spellOption.input.addEventListener("change", () => {
+    if (spellOption.input.checked) {
+      updateLabWorkbench("mode", "spell");
     }
   });
   itemOption.input.addEventListener("change", () => {
@@ -180,24 +154,73 @@ export function renderLabPanel(target: HTMLElement) {
   const spellLevelInput = createInput("number");
   spellLevelInput.min = "1";
   bindNumberInput(spellLevelInput, (value) => updateLabWorkbench("spellLevel", value), 1);
-  workbenchForm.appendChild(createField("Primary Spell Level", spellLevelInput));
+  workbenchForm.appendChild(createField("Spell Level", spellLevelInput));
 
   const materialInput = createInput("number");
   materialInput.min = "0";
   bindNumberInput(materialInput, (value) => updateLabWorkbench("materialCost", value), 0);
   workbenchForm.appendChild(createField("Material Cost (gp)", materialInput));
 
-  const formulaField = document.createElement("div");
-  formulaField.className = "lab-field lab-formula-field";
-  const formulaLabel = document.createElement("label");
-  formulaLabel.className = "label";
-  formulaLabel.textContent = "Formula Prepared";
-  const formulaCheckbox = document.createElement("input");
-  formulaCheckbox.type = "checkbox";
-  formulaCheckbox.className = "lab-checkbox";
-  formulaCheckbox.addEventListener("change", () => updateLabWorkbench("hasFormula", formulaCheckbox.checked));
-  formulaField.append(formulaLabel, formulaCheckbox);
-  workbenchForm.appendChild(formulaField);
+  let spellTypeField: HTMLDivElement;
+  let commonSpellInput: HTMLInputElement;
+  let newSpellInput: HTMLInputElement;
+  let componentsField: HTMLDivElement;
+  let componentsCheckbox: HTMLInputElement;
+
+  // Initialize spell type field
+  spellTypeField = document.createElement("div");
+  spellTypeField.className = "lab-field lab-spell-type-field";
+  const spellTypeLabel = document.createElement("label");
+  spellTypeLabel.className = "label";
+  spellTypeLabel.textContent = "Spell Type";
+  const commonOption = createRadioOption("Common Spell", "common");
+  const newOption = createRadioOption("New Spell", "new");
+  spellTypeField.append(spellTypeLabel, commonOption.wrapper, newOption.wrapper);
+  workbenchForm.appendChild(spellTypeField);
+
+  commonOption.input.addEventListener("change", () => {
+    if (commonOption.input.checked) {
+      updateLabWorkbench("isNewSpell", false);
+    }
+  });
+  newOption.input.addEventListener("change", () => {
+    if (newOption.input.checked) {
+      updateLabWorkbench("isNewSpell", true);
+    }
+  });
+
+  // Initialize components field
+  componentsField = document.createElement("div");
+  componentsField.className = "lab-field lab-components-field";
+  const componentsLabel = document.createElement("label");
+  componentsLabel.className = "label";
+  componentsLabel.textContent = "Rare Components Acquired";
+  componentsCheckbox = document.createElement("input");
+  componentsCheckbox.type = "checkbox";
+  componentsCheckbox.className = "lab-checkbox";
+  componentsCheckbox.addEventListener("change", () => updateLabWorkbench("hasComponents", componentsCheckbox.checked));
+  const acquireBtn = document.createElement("button");
+  acquireBtn.type = "button";
+  acquireBtn.className = "button small";
+  acquireBtn.textContent = "Acquire";
+  acquireBtn.addEventListener("click", () => {
+    const result = acquireComponents();
+    if (result.success) {
+      showNotification({
+        title: "Components acquired",
+        message: "Rare spell components have been obtained.",
+        variant: "success",
+      });
+    } else {
+      showNotification({
+        title: "Acquisition failed",
+        message: result.error ?? "Unknown error occurred.",
+        variant: "warning",
+      });
+    }
+  });
+  componentsField.append(componentsLabel, componentsCheckbox, acquireBtn);
+  workbenchForm.appendChild(componentsField);
 
   workbenchCard.appendChild(workbenchForm);
 
@@ -222,15 +245,15 @@ export function renderLabPanel(target: HTMLElement) {
   chanceValue.className = "lab-chance-value";
   const chanceBreakdown = document.createElement("div");
   chanceBreakdown.className = "lab-chance-breakdown";
-  const libraryWarning = document.createElement("div");
-  libraryWarning.className = "lab-chance-warning";
+  const requirementsWarning = document.createElement("div");
+  requirementsWarning.className = "lab-chance-warning";
 
-  chanceBlock.append(chanceLabel, chanceValue, chanceBreakdown, libraryWarning);
+  chanceBlock.append(chanceLabel, chanceValue, chanceBreakdown, requirementsWarning);
   summaryCard.appendChild(chanceBlock);
 
-  const libraryInfo = document.createElement("div");
-  libraryInfo.className = "lab-library-info";
-  summaryCard.appendChild(libraryInfo);
+  const requirementsInfo = document.createElement("div");
+  requirementsInfo.className = "lab-requirements-info";
+  summaryCard.appendChild(requirementsInfo);
 
   workbenchCard.appendChild(summaryCard);
 
@@ -256,7 +279,7 @@ export function renderLabPanel(target: HTMLElement) {
       });
       return;
     }
-    const title = formulaOption.input.checked ? "Formula complete" : "Item crafted";
+    const title = spellOption.input.checked ? "Spell researched" : "Item crafted";
     showNotification({
       title,
       message: `Roll ${result.roll}/${result.chance}%`,
@@ -300,30 +323,53 @@ export function renderLabPanel(target: HTMLElement) {
     classSelect.value = state.caster.class;
     statInput.value = String(state.caster.mentalStat);
     goldInput.value = String(state.resources.gold);
-    libraryInput.value = String(state.resources.libraryValue);
-    formulaOption.input.checked = state.workbench.mode === "formula";
+    spellOption.input.checked = state.workbench.mode === "spell";
     itemOption.input.checked = state.workbench.mode === "item";
     itemSelect.value = state.workbench.itemType;
     spellLevelInput.value = String(state.workbench.spellLevel);
     materialInput.value = String(state.workbench.materialCost);
-    formulaCheckbox.checked = state.workbench.hasFormula;
-    formulaField.style.display = state.workbench.mode === "item" ? "flex" : "none";
+    commonOption.input.checked = !state.workbench.isNewSpell;
+    newOption.input.checked = state.workbench.isNewSpell;
+    componentsCheckbox.checked = state.workbench.hasComponents;
+    spellTypeField.style.display = state.workbench.mode === "spell" ? "flex" : "none";
+    itemSelect.parentElement!.style.display = state.workbench.mode === "item" ? "flex" : "none";
+    materialInput.parentElement!.style.display = state.workbench.mode === "item" ? "flex" : "none";
+    componentsField.style.display = (state.workbench.mode === "spell" || state.workbench.mode === "item") ? "flex" : "none";
 
     const calc = calculateLabExperiment(state);
     costStat.value.textContent = formatGp(calc.cost);
     timeStat.value.textContent = `${calc.timeWeeks.toLocaleString()} wk${calc.timeWeeks === 1 ? "" : "s"}`;
     chanceValue.textContent = `${calc.chance}%`;
-    chanceValue.dataset.state = calc.libraryOk ? "ok" : "fail";
+    chanceValue.dataset.state = (calc.componentsOk && (!calc.libraryRequired || state.resources.libraryValue > 0)) ? "ok" : "fail";
     chanceBreakdown.textContent = calc.breakdown;
-    libraryWarning.textContent = calc.libraryOk ? "" : `Library inadequate! Need ${formatGp(calc.libraryRequired)}.`;
-    libraryWarning.style.display = calc.libraryOk ? "none" : "block";
-    libraryInfo.textContent = `Current library: ${formatGp(state.resources.libraryValue)} · Required: ${formatGp(calc.libraryRequired)}`;
+    const hasLibrary = calc.libraryRequired ? state.resources.libraryValue > 0 : true;
+    requirementsWarning.textContent = "";
+    if (calc.libraryRequired && !hasLibrary) {
+      requirementsWarning.textContent += "Large library required! ";
+    }
+    if (!calc.componentsOk && calc.componentsRequired) {
+      requirementsWarning.textContent += "Rare spell components required!";
+    }
+    requirementsWarning.style.display = requirementsWarning.textContent ? "block" : "none";
+
+    let requirementsText = "";
+    if (calc.libraryRequired) {
+      requirementsText += `Library: ${hasLibrary ? "Available" : "Required"}`;
+    }
+    if (calc.componentsRequired) {
+      if (requirementsText) requirementsText += " · ";
+      requirementsText += `Components: ${calc.componentsOk ? "Acquired" : "Needed"}`;
+    }
+    if (!calc.libraryRequired && !calc.componentsRequired) {
+      requirementsText = "No special requirements";
+    }
+    requirementsInfo.textContent = requirementsText;
     const experimentBlocked = Boolean(state.activeTrackerId);
     craftButton.disabled = experimentBlocked;
     craftButton.textContent = experimentBlocked
       ? "Experiment In Progress"
-      : calc.mode === "formula"
-        ? "Research Formula"
+      : calc.mode === "spell"
+        ? "Research Spell"
         : "Create Item";
     activeNotice.textContent = experimentBlocked ? "Downtime running — check calendar trackers." : "";
     errorMessage.textContent = "";

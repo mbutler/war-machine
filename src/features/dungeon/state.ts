@@ -1013,13 +1013,29 @@ export function restParty() {
   let turnsSpent = 0;
   updateState((state) => {
     const dungeon = state.dungeon;
-    turnsSpent = advanceTurn(dungeon, 1, state.party.roster);
+    // BECMI: Resting takes 6 hours (36 turns) to be "well-rested" for spell recovery
+    const REST_DURATION_TURNS = 36; // 6 hours × 6 turns per hour
+    turnsSpent = advanceTurn(dungeon, REST_DURATION_TURNS, state.party.roster);
+
     if (dungeon.rations > 0) {
       dungeon.rations -= 1;
-      addLogEntry(dungeon, "event", "Party rests and eats.");
+      addLogEntry(dungeon, "event", "Party rests and eats", `Spent ${REST_DURATION_TURNS} turns resting (6 hours). Spellcasters may now recover spells.`);
     } else {
-      addLogEntry(dungeon, "event", "Rested without rations", "Fatigue may become an issue.");
+      addLogEntry(dungeon, "event", "Rested without rations", `Spent ${REST_DURATION_TURNS} turns resting (6 hours), but fatigue may become an issue without food.`);
     }
+
+    // Recover expended spells - BECMI: "one night's sleep is enough rest" for spell recovery
+    // Spellcasters can now re-memorize spells (though this would take additional study time)
+    state.party.roster.forEach(character => {
+      if (character.spells?.known) {
+        character.spells.known.forEach(spell => {
+          if (spell.expended) {
+            spell.expended = false;
+            spell.memorized = false; // Spells are forgotten when cast, need re-memorization
+          }
+        });
+      }
+    });
 
     // Advance calendar time
     if (turnsSpent > 0) {
@@ -1027,7 +1043,7 @@ export function restParty() {
       const before = describeClock(calendar.clock);
       advanceClock(calendar.clock, "turn", turnsSpent);
       const after = describeClock(calendar.clock);
-      addCalendarLog(calendar, `Dungeon rest: +${turnsSpent} turn${turnsSpent === 1 ? "" : "s"}`, `${before} → ${after}`);
+      addCalendarLog(calendar, `Dungeon rest: +${turnsSpent} turns (6 hours)`, `${before} → ${after}`);
     }
   });
 }
@@ -1286,18 +1302,22 @@ export function castSpellDuringDelve(characterId: string, spellName: string) {
 
 function advanceTurn(dungeon: typeof DEFAULT_STATE.dungeon, turns = 1, party?: any[]): number {
   if (turns <= 0) return 0;
-  dungeon.turn += turns;
 
-  // Handle torch consumption - each torch burns for 6 turns (1 hour)
+  const startingTurn = dungeon.turn;
+
+  // Handle torch consumption and wandering monster checks for each turn
   const TORCH_DURATION_TURNS = 6;
   for (let i = 0; i < turns; i++) {
+    dungeon.turn++;
+
+    // Handle torch consumption - each torch burns for 6 turns (1 hour)
     if (dungeon.torches > 0) {
       dungeon.torchTurnsUsed++;
       if (dungeon.torchTurnsUsed >= TORCH_DURATION_TURNS) {
         dungeon.torches--;
         dungeon.torchTurnsUsed = 0;
         addLogEntry(dungeon, "event", `Torch burned out (${dungeon.torches} remaining)`);
-        
+
         // Update lighting if last torch burned out
         if (dungeon.torches === 0) {
           dungeon.lighting = "dark";
@@ -1305,11 +1325,17 @@ function advanceTurn(dungeon: typeof DEFAULT_STATE.dungeon, turns = 1, party?: a
         }
       }
     }
-  }
 
-  // Check for wandering monsters every 2 turns (BECMI rule)
-  if (dungeon.turn % 2 === 0) {
-    checkWanderingMonsters(dungeon, party);
+    // Check for wandering monsters every 2 turns (BECMI rule)
+    if (dungeon.turn % 2 === 0) {
+      checkWanderingMonsters(dungeon, party);
+      // If we encountered monsters during rest, stop the rest early
+      if (dungeon.status === "encounter" || dungeon.status === "surprise") {
+        addLogEntry(dungeon, "event", "Rest interrupted!", "Monsters appeared during rest period!");
+        // Return the number of turns actually completed
+        return dungeon.turn - startingTurn;
+      }
+    }
   }
 
   return turns;

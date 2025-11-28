@@ -68,7 +68,8 @@ export function clearDominionLog() {
 
 export function processDominionSeason(): DominionLogEntry {
   let logEntry: DominionLogEntry | null = null;
-  let grossIncome = 0;
+  let taxIncome = 0;
+  let resourceIncome = 0;
   let titheAmount = 0;
   let expenses = 0;
   let holidaySpending = 0;
@@ -81,11 +82,12 @@ export function processDominionSeason(): DominionLogEntry {
     const turn = state.dominion.turn;
     const result = processDominionTurn(state.dominion, turn);
 
-    // Capture values for ledger recording
-    const population = Math.max(0, state.dominion.families);
-    const resourceValue = state.dominion.resources.reduce((sum, r) => sum + r.value, 0);
-    grossIncome = population * (turn.taxRate + resourceValue);
-    titheAmount = Math.floor(grossIncome * (turn.tithePercent / 100));
+    // Capture values from projection for ledger recording
+    // Note: Standard income (10gp/family) is services, not cash - don't record as gold income
+    // Only tax and resource income are actual gold
+    taxIncome = result.taxIncome;
+    resourceIncome = result.resourceIncome;
+    titheAmount = result.tithe;
     expenses = turn.expenses;
     holidaySpending = turn.holidaySpending;
 
@@ -102,8 +104,10 @@ export function processDominionSeason(): DominionLogEntry {
   }
 
   // Record transactions in the central ledger
-  if (grossIncome > 0) {
-    recordTaxIncome(grossIncome, logEntry.season);
+  // Per BECMI: Only tax and resource income earn XP (not standard income which is services)
+  const cashIncome = taxIncome + resourceIncome;
+  if (cashIncome > 0) {
+    recordTaxIncome(cashIncome, logEntry.season);
   }
   if (titheAmount > 0) {
     recordTithe(titheAmount, `Tithe: ${logEntry.season}`);
