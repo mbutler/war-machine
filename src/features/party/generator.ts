@@ -207,7 +207,7 @@ function buyEquipment(classKey: ClassKey, gold: number, dexMod: number) {
     ac = 7;
   }
 
-  const canUseShield = ["fighter", "cleric", "dwarf", "elf"].includes(classKey);
+  const canUseShield = ["fighter", "cleric", "druid", "dwarf", "elf"].includes(classKey);
   if (canUseShield && gold >= EQUIPMENT_PRICES["Shield"]) {
     gold -= EQUIPMENT_PRICES["Shield"];
     hasShield = true;
@@ -220,6 +220,7 @@ function buyEquipment(classKey: ClassKey, gold: number, dexMod: number) {
     elf: ["Sword", "Mace", "Dagger"],
     halfling: ["Sword", "Mace", "Dagger"],
     cleric: ["Mace", "Dagger"],
+    druid: ["Mace", "Dagger"],
     thief: ["Sword", "Dagger"],
     magicuser: ["Dagger"],
     mystic: ["Unarmed"], // Mystics fight unarmed

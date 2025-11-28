@@ -721,7 +721,7 @@ const ENCOUNTER_DATA: Record<string, Record<string, Array<{ name: string; qty: s
   }
 };
 
-const CLASSES = ["Fighter", "Cleric", "Magic-User", "Thief", "Dwarf", "Elf"];
+const CLASSES = ["Fighter", "Cleric", "Magic-User", "Thief", "Druid", "Mystic", "Dwarf", "Elf"];
 const ALIGNMENTS = ["Lawful", "Neutral", "Chaotic"];
 
 function shouldGenerateCastle(terrainType: WildernessTerrainType, randomValue: number): boolean {
