@@ -131,6 +131,7 @@ function renderStatus(container: HTMLElement, dungeon = getDungeonState()) {
     statusBadge.textContent = dungeon.status.toUpperCase();
     if (dungeon.status === "surprise") {
       statusBadge.style.background = "var(--accent-c)";
+      statusBadge.style.color = "#000";
       statusBadge.textContent = "⚡ TACTICAL ADVANTAGE";
     }
     container.appendChild(statusBadge);
@@ -336,6 +337,7 @@ function renderEncounterPanel(dungeon = getDungeonState(), party = getPartyState
   badge.className = "chip";
   badge.textContent = encounter.reaction.toUpperCase();
   badge.style.background = getReactionColor(encounter.reaction);
+  badge.style.color = "#000";
   panel.appendChild(badge);
 
   // Info row with distance
@@ -507,6 +509,7 @@ function renderObstaclePanel(obstacle: DungeonObstacle, party: PartyState) {
   badge.className = "chip";
   badge.textContent = obstacle.type.toUpperCase();
   badge.style.background = borderColors[obstacle.type];
+  badge.style.color = "#000";
   panel.appendChild(badge);
   
   // Description
@@ -641,6 +644,9 @@ function renderLog(container: HTMLElement, log: DungeonLogEntry[] = []) {
     // Color-code log entries
     if (entry.kind === "combat") badge.style.background = "rgba(220, 38, 38, 0.4)";
     else if (entry.kind === "loot") badge.style.background = "rgba(245, 158, 11, 0.4)";
+
+    // Ensure chip text is legible on colored backgrounds
+    badge.style.color = "#000";
     
     const time = document.createElement("span");
     time.className = "timestamp";

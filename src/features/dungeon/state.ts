@@ -1,4 +1,11 @@
-import type { DungeonEncounter, DungeonLogEntry, DungeonObstacle, LightingCondition, EncounterReaction, ObstacleType } from "../../state/schema";
+import type {
+  DungeonEncounter,
+  DungeonLogEntry,
+  DungeonObstacle,
+  LightingCondition,
+  EncounterReaction,
+  ObstacleType,
+} from "../../state/schema";
 import { DEFAULT_STATE, DungeonState } from "../../state/schema";
 import { getState, subscribe, updateState } from "../../state/store";
 import { calculatePartySnapshot } from "../party/resources";
@@ -6,6 +13,7 @@ import { rollDie, rollFormula } from "../../rules/dice";
 import { pickEncounter, rollSurprise, resolveReaction, rollEncounterDistance, rollWanderingMonsterDistance } from "../../rules/dungeon/encounters";
 import { randomObstacle, randomTrap, rollOpenDoors, triggerTrap, type ObstacleDefinition } from "../../rules/dungeon/obstacles";
 import { MAGIC_ITEMS, TREASURE_TYPES } from "../../rules/dungeon/treasure";
+import { ALL_EQUIPMENT } from "../../rules/tables/equipment";
 import { createId } from "../../utils/id";
 import { markSpellExpended } from "../party/state";
 import { describeClock, advanceClock, addCalendarLog } from "../calendar/state";
@@ -390,23 +398,17 @@ function resolveTrapObstacle(dungeon: typeof DEFAULT_STATE.dungeon, party: any[]
 }
 
 function applyTrapDamage(dungeon: typeof DEFAULT_STATE.dungeon, party: any[], obstacle: DungeonObstacle) {
-  if (!obstacle.damage || obstacle.damage === "0") {
-    // Special effect trap (poison needle, etc.)
-    if (obstacle.saveType === "death") {
-      addLogEntry(dungeon, "event", "Poison!", "The trap releases poison. Save vs. Poison required!");
-    }
-    return;
-  }
-  
   // Roll damage
-  const match = obstacle.damage.match(/(\d+)d(\d+)/);
-  if (!match) return;
-  
-  const numDice = parseInt(match[1]);
-  const dieSize = parseInt(match[2]);
   let totalDamage = 0;
-  for (let i = 0; i < numDice; i++) {
-    totalDamage += rollDie(dieSize);
+  if (obstacle.damage && obstacle.damage !== "0") {
+    const match = obstacle.damage.match(/(\d+)d(\d+)/);
+    if (match) {
+      const numDice = parseInt(match[1]);
+      const dieSize = parseInt(match[2]);
+      for (let i = 0; i < numDice; i++) {
+        totalDamage += rollDie(dieSize);
+      }
+    }
   }
   
   // Apply to random party member (front-liner)
@@ -415,7 +417,7 @@ function applyTrapDamage(dungeon: typeof DEFAULT_STATE.dungeon, party: any[], ob
   
   const victim = livingParty[0]; // Front-liner takes trap damage
   
-  // Allow saving throw
+  // Allow saving throw (including save-or-die for poison traps)
   let saveTarget = 15; // Default
   if (obstacle.saveType && victim.derivedStats.savingThrows) {
     const saves = victim.derivedStats.savingThrows;
@@ -429,17 +431,47 @@ function applyTrapDamage(dungeon: typeof DEFAULT_STATE.dungeon, party: any[], ob
   }
   
   const saveRoll = rollDie(20);
+  const isPoisonSave = obstacle.saveType === "death";
+
+  // Save-or-die poisons: failure is immediate death regardless of rolled damage
+  if (isPoisonSave && saveRoll < saveTarget) {
+    victim.derivedStats.hp.current = 0;
+    victim.status = "dead";
+    addLogEntry(
+      dungeon,
+      "combat",
+      `${victim.name} succumbs to poison!`,
+      `Failed save vs. Poison (rolled ${saveRoll} vs ${saveTarget}).`,
+    );
+    return;
+  }
+
   if (saveRoll >= saveTarget) {
-    // Saved - avoid or half damage depending on trap type
+    // Saved - avoid or half damage depending on trap type (non-poison)
     if (obstacle.id.includes("pit") || obstacle.id.includes("block") || obstacle.id.includes("blade")) {
-      addLogEntry(dungeon, "combat", `${victim.name} dodges!`, `Saved vs. ${obstacle.saveType} (rolled ${saveRoll} vs ${saveTarget}). No damage taken.`);
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${victim.name} dodges!`,
+        `Saved vs. ${obstacle.saveType} (rolled ${saveRoll} vs ${saveTarget}). No damage taken.`,
+      );
       totalDamage = 0;
     } else {
       totalDamage = Math.floor(totalDamage / 2);
-      addLogEntry(dungeon, "combat", `${victim.name} partially avoids trap`, `Saved vs. ${obstacle.saveType} (rolled ${saveRoll} vs ${saveTarget}). Takes ${totalDamage} damage (half).`);
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${victim.name} partially avoids trap`,
+        `Saved vs. ${obstacle.saveType} (rolled ${saveRoll} vs ${saveTarget}). Takes ${totalDamage} damage (half).`,
+      );
     }
   } else {
-    addLogEntry(dungeon, "combat", `${victim.name} hit by trap!`, `Failed save vs. ${obstacle.saveType} (rolled ${saveRoll} vs ${saveTarget}). Takes ${totalDamage} damage!`);
+    addLogEntry(
+      dungeon,
+      "combat",
+      `${victim.name} hit by trap!`,
+      `Failed save vs. ${obstacle.saveType} (rolled ${saveRoll} vs ${saveTarget}). Takes ${totalDamage} damage!`,
+    );
   }
   
   if (totalDamage > 0) {
@@ -788,8 +820,8 @@ function resolvePartyAttacks(dungeon: typeof DEFAULT_STATE.dungeon, party: any[]
   let totalDamage = 0;
   const hpBefore = encounter.hp;
 
-  party.forEach(char => {
-    if (char.derivedStats.hp.current <= 0) return;
+  party.forEach((char) => {
+    if (char.derivedStats.hp.current <= 0 || char.status !== "alive") return;
 
     // Calculate attack roll using THAC0
     const attackRoll = rollDie(20);
@@ -797,8 +829,8 @@ function resolvePartyAttacks(dungeon: typeof DEFAULT_STATE.dungeon, party: any[]
     const requiredRoll = char.derivedStats.thac0 - targetAC;
 
     if (attackRoll >= requiredRoll || attackRoll === 20) { // Natural 20 always hits
-      // Use weapon damage (simplified to 1d6 for now)
-      const damage = rollDie(6);
+      const damageFormula = getWeaponDamageFormulaForCharacter(char);
+      const damage = rollFormula(damageFormula);
       totalDamage += damage;
       addLogEntry(dungeon, "combat", `${char.name} hits!`, `Deals ${damage} damage to ${encounter.name}`);
     } else {
@@ -809,6 +841,11 @@ function resolvePartyAttacks(dungeon: typeof DEFAULT_STATE.dungeon, party: any[]
   if (totalDamage > 0) {
     encounter.hp = Math.max(0, encounter.hp - totalDamage);
     addLogEntry(dungeon, "combat", `Party deals ${totalDamage} total damage`, `${encounter.name} has ${encounter.hp} HP remaining`);
+
+    // If the encounter has been reduced to 0 HP, skip morale checks - they are already defeated
+    if (encounter.hp <= 0) {
+      return;
+    }
 
     // BECMI Morale Checks
     const hpPerMonster = Math.max(1, Math.round(encounter.hitDice * 4.5)); // Average of 1dHD
@@ -854,7 +891,7 @@ function resolveMonsterAttacks(dungeon: typeof DEFAULT_STATE.dungeon, party: any
   // Each active monster attacks
   for (let i = 0; i < activeCount; i++) {
     // Select random target
-    const livingTargets = party.filter(char => char.derivedStats.hp.current > 0);
+    const livingTargets = party.filter((char) => char.derivedStats.hp.current > 0 && char.status !== "dead");
     if (livingTargets.length === 0) break;
 
     const target = livingTargets[Math.floor(Math.random() * livingTargets.length)];
@@ -866,21 +903,34 @@ function resolveMonsterAttacks(dungeon: typeof DEFAULT_STATE.dungeon, party: any
 
     if (attackRoll >= requiredRoll || attackRoll >= 20) {
       const damage = rollFormula(encounter.damage);
-      const newHp = Math.max(0, target.derivedStats.hp.current - damage);
+      let newHp = Math.max(0, target.derivedStats.hp.current - damage);
       target.derivedStats.hp.current = newHp;
 
       if (newHp <= 0) {
-        addLogEntry(dungeon, "combat", `${target.name} falls!`, `Hit by ${encounter.name} for ${damage} damage`);
+        addLogEntry(
+          dungeon,
+          "combat",
+          `${target.name} falls!`,
+          `Hit by ${encounter.name} for ${damage} damage`,
+        );
         target.status = "dead";
-        
+
         // Check monster morale on PC death (first death on either side)
         if (!encounter.moraleChecked.firstDeath) {
           encounter.moraleChecked.firstDeath = true;
           // Note: Monsters killing a PC might boost their morale, but rules say check anyway
         }
       } else {
-        addLogEntry(dungeon, "combat", `${target.name} hit!`, `Takes ${damage} damage from ${encounter.name}`);
+        addLogEntry(
+          dungeon,
+          "combat",
+          `${target.name} hit!`,
+          `Takes ${damage} damage from ${encounter.name}`,
+        );
       }
+
+      // Apply special monster abilities (poison, paralysis, petrification, energy drain, charm)
+      applyMonsterSpecialEffectsOnHit(dungeon, encounter, target);
     } else {
       addLogEntry(dungeon, "combat", `${encounter.name} misses ${target.name}`, `Attack roll: ${attackRoll} (needed ${requiredRoll}+)`);
     }
@@ -1501,6 +1551,216 @@ function generateTreasure(type: string): { summary: string; totalGold: number } 
   }
 
   return { summary: summary.join("; "), totalGold: total };
+}
+
+function convertToGold(kind: string, amount: number): number {
+  switch (kind) {
+    case "cp":
+      return amount / 100;
+    case "sp":
+      return amount / 10;
+    case "ep":
+      return amount / 2;
+    case "pp":
+      return amount * 5;
+    default:
+      return amount;
+  }
+}
+
+// Look up a character's weapon damage based on their equipped weapon and the equipment tables
+function getWeaponDamageFormulaForCharacter(character: any): string {
+  const weaponName: string | undefined = character.equipment?.weapon;
+  if (!weaponName) {
+    return "1d6";
+  }
+
+  // Direct match by name for melee/missile weapons
+  const direct = ALL_EQUIPMENT.find(
+    (item) =>
+      (item.category === "weapons_melee" || item.category === "weapons_missile") &&
+      item.name === weaponName &&
+      item.damage,
+  );
+  if (direct?.damage) {
+    // Some weapons (e.g. Bastard Sword) have multiple damage entries separated by "/"
+    const parts = direct.damage.split("/");
+    return parts[0].trim();
+  }
+
+  const lower = weaponName.toLowerCase();
+  const aliasMap: Record<string, string> = {
+    sword: "Sword (Normal)",
+    "long sword": "Sword (Normal)",
+    "short sword": "Short Sword",
+    mace: "Mace",
+    dagger: "Dagger",
+    "silver dagger": "Silver Dagger",
+    staff: "Staff",
+    spear: "Spear",
+    club: "Club",
+    "war hammer": "War Hammer",
+    "hand axe": "Hand Axe",
+    "battle axe": "Battle Axe",
+    javelin: "Javelin",
+    "two-handed sword": "Two-Handed Sword",
+    // Mystics and similar unarmed fighters
+    unarmed: "unarmed",
+  };
+
+  const aliasTarget = aliasMap[lower];
+  if (aliasTarget === "unarmed") {
+    // Simple unarmed damage approximation
+    return "1d2";
+  }
+
+  if (aliasTarget) {
+    const aliased = ALL_EQUIPMENT.find(
+      (item) =>
+        (item.category === "weapons_melee" || item.category === "weapons_missile") &&
+        item.name === aliasTarget &&
+        item.damage,
+    );
+    if (aliased?.damage) {
+      const parts = aliased.damage.split("/");
+      return parts[0].trim();
+    }
+  }
+
+  // Fallback if we can't resolve the weapon
+  return "1d6";
+}
+
+// Apply core BECMI-style special abilities for monsters on a successful hit
+function applyMonsterSpecialEffectsOnHit(
+  dungeon: typeof DEFAULT_STATE.dungeon,
+  encounter: DungeonEncounter,
+  target: any,
+): void {
+  if (!encounter.special) return;
+  if (!target || target.status === "dead" || target.derivedStats?.hp?.current <= 0) return;
+
+  const special = encounter.special.toLowerCase();
+  const saves = target.derivedStats?.savingThrows;
+  if (!saves) return;
+
+  const name = target.name ?? "A party member";
+
+  // Helper to roll a save and report
+  const rollSave = (targetNumber: number, kind: string) => {
+    const roll = rollDie(20);
+    const success = roll >= targetNumber;
+    return { roll, success, targetNumber, kind };
+  };
+
+  // Poison: save vs Death/Poison or die outright
+  if (special.includes("poison")) {
+    const saveInfo = rollSave(saves.deathPoison, "Death/Poison");
+    if (!saveInfo.success) {
+      target.derivedStats.hp.current = 0;
+      target.status = "dead";
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${name} is slain by poison!`,
+        `Failed save vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+      );
+      return;
+    }
+    addLogEntry(
+      dungeon,
+      "combat",
+      `${name} resists the poison`,
+      `Saved vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+    );
+  }
+
+  // Paralysis (ghouls, carrion crawlers, etc.)
+  if (special.includes("paralysis")) {
+    const saveInfo = rollSave(saves.paraStone, "Paralysis/Turn to Stone");
+    if (!saveInfo.success) {
+      target.status = "paralyzed";
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${name} is paralyzed!`,
+        `Failed save vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+      );
+    } else {
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${name} shrugs off paralysis`,
+        `Saved vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+      );
+    }
+  }
+
+  // Petrification (medusa, basilisk, cockatrice, etc.)
+  if (special.includes("petrify") || special.includes("petrification") || special.includes("turns to stone")) {
+    const saveInfo = rollSave(saves.paraStone, "Paralysis/Turn to Stone");
+    if (!saveInfo.success) {
+      target.derivedStats.hp.current = 0;
+      target.status = "petrified";
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${name} is turned to stone!`,
+        `Failed save vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+      );
+      return;
+    }
+    addLogEntry(
+      dungeon,
+      "combat",
+      `${name} avoids petrification`,
+      `Saved vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+    );
+  }
+
+  // Energy drain (wights, wraiths, spectres, vampires)
+  if (special.includes("energy drain") || special.includes("energy-drain") || special.includes("level drain")) {
+    const saveInfo = rollSave(saves.spells, "Spells (Energy Drain)");
+    if (!saveInfo.success) {
+      // For survivability modeling, treat full energy drain as effectively lethal
+      target.derivedStats.hp.current = 0;
+      target.status = "drained";
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${name} is drained of life energy!`,
+        `Failed save vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+      );
+      return;
+    }
+    addLogEntry(
+      dungeon,
+      "combat",
+      `${name} resists energy drain`,
+      `Saved vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+    );
+  }
+
+  // Charm (harpies, vampires, devil swine, etc.)
+  if (special.includes("charm")) {
+    const saveInfo = rollSave(saves.spells, "Spells (Charm)");
+    if (!saveInfo.success) {
+      target.status = "charmed";
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${name} is charmed!`,
+        `Failed save vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+      );
+    } else {
+      addLogEntry(
+        dungeon,
+        "combat",
+        `${name} resists charm`,
+        `Saved vs ${saveInfo.kind} (rolled ${saveInfo.roll} vs ${saveInfo.targetNumber}).`,
+      );
+    }
+  }
 }
 
 function convertToGold(kind: string, amount: number): number {

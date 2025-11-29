@@ -1,6 +1,6 @@
 import { INITIAL_MERCHANT_STATE } from "./initialMerchant";
 
-export const STATE_VERSION = "1.0.0";
+export const STATE_VERSION = "1.0.1";
 
 export type Alignment = "Lawful" | "Neutral" | "Chaotic";
 
@@ -75,7 +75,13 @@ export interface Retainer {
   equipment: string;
 }
 
-export type CharacterStatus = "alive" | "dead";
+export type CharacterStatus =
+  | "alive"
+  | "dead"
+  | "paralyzed"
+  | "petrified"
+  | "drained"
+  | "charmed";
 
 export interface Character {
   id: string;
@@ -830,7 +836,7 @@ export const DEFAULT_STATE: WarMachineState = {
   party: {
     roster: [],
     preferences: {
-      defaultSize: 4,
+      defaultSize: 5,
       defaultLevel: 1,
       method: "strict",
     },
@@ -883,9 +889,9 @@ export const DEFAULT_STATE: WarMachineState = {
     days: 0,
     movementPoints: 24,
     maxMovementPoints: 24,
-    partySize: 6,
-    rations: 42,
-    water: 42,
+    partySize: 5,
+    rations: 35,
+    water: 35,
     startTerrain: "city",
     climate: "normal",
     weather: {
