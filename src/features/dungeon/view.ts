@@ -110,7 +110,21 @@ function renderStatus(container: HTMLElement, dungeon = getDungeonState()) {
     dark: "⬛ Dark"
   }[dungeon.lighting];
 
+  const areaLabel = (() => {
+    if (dungeon.areaType === "room") return "Room";
+    if (dungeon.areaType === "corridor") return "Corridor";
+    if (dungeon.areaType === "intersection") {
+      // Use RC mapping terms where possible
+      if (dungeon.intersectionKind === "side_passage") return "Side passage";
+      if (dungeon.intersectionKind === "t_intersection") return "T-intersection";
+      if (dungeon.intersectionKind === "four_way") return "Four-way intersection";
+      return "Intersection";
+    }
+    return "Area";
+  })();
+
   grid.append(
+    stat("Area", areaLabel),
     stat("Depth", `Level ${dungeon.depth ?? 1}`),
     stat("Turn", `${dungeon.turn ?? 0}`),
     stat("Lighting", lightingLabel, dungeon.lighting === "dark"),

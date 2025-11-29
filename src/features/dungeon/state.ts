@@ -1,7 +1,9 @@
 import type {
+  DungeonAreaType,
   DungeonEncounter,
   DungeonLogEntry,
   DungeonObstacle,
+  DungeonRoomContents,
   LightingCondition,
   EncounterReaction,
   ObstacleType,
@@ -53,6 +55,12 @@ export function resetDungeonState() {
       lairMode: false,
       lighting: "dim",
       status: "idle",
+      // Start in a generic room on Level 1
+      areaType: "room",
+      intersectionKind: null,
+      roomContents: "empty",
+      roomHasTreasure: false,
+      roomTreasureClaimed: false,
       roomSearched: false,
       log: [],
     };
@@ -84,36 +92,53 @@ export function exploreRoom() {
     const dungeon = state.dungeon;
     const turnsSpent = advanceTurn(dungeon, 1, state.party.roster);
 
-    // BECMI dungeon exploration: Most rooms are empty or have features
-    const roomResult = determineRoomContents();
+    // If a wandering monster encounter or surprise occurred during the turn advance,
+    // do not proceed with further exploration or room stocking for this action.
+    if (dungeon.status === "encounter" || dungeon.status === "surprise") {
+      return;
+    }
 
-    if (roomResult.type === "encounter") {
-      // Room contains monsters (placed encounter)
+    // Pick a lightweight area type (room/corridor/intersection) for flavor only
+    const { areaType, intersectionKind } = determineAreaType();
+    dungeon.areaType = areaType;
+    dungeon.intersectionKind = intersectionKind ?? null;
+
+    // BECMI RC Random Stocking: determine high-level room contents + treasure flag
+    const stocking = rollRoomStocking();
+    dungeon.roomContents = stocking.contents;
+    dungeon.roomHasTreasure = stocking.hasTreasure && stocking.contents !== "monster";
+    dungeon.roomTreasureClaimed = false;
+    dungeon.roomSearched = false; // New area, search not yet performed
+
+    // Resolve contents based on RC categories
+    if (stocking.contents === "monster") {
+      // Room contains monsters (placed encounter); treasure handled via lair tables
       startEncounter(dungeon, false, state.party.roster);
-    } else if (roomResult.type === "obstacle") {
-      // Room has a feature or trap - pick appropriate type
-      const roll = rollDie(100);
-      let obstacleDef: ObstacleDefinition;
-      if (roll <= 40) {
-        obstacleDef = randomTrap(); // 40% traps
-      } else if (roll <= 70) {
-        obstacleDef = randomObstacle("door"); // 30% doors
-      } else {
-        obstacleDef = randomObstacle("hazard"); // 30% hazards/features
-      }
-      
+    } else if (stocking.contents === "trap") {
+      // Trap room – pick an appropriate trap obstacle
+      const obstacleDef = randomTrap();
       dungeon.status = "obstacle";
       dungeon.obstacle = buildObstacle(obstacleDef);
       dungeon.encounter = undefined;
-      
-      const typeLabel = obstacleDef.type === "trap" ? "⚠️ Trap" : 
-                        obstacleDef.type === "door" ? "🚪 Door" : "⚡ Hazard";
+
+      const typeLabel = "⚠️ Trap";
       addLogEntry(dungeon, "event", `${typeLabel}: ${obstacleDef.name}`, obstacleDef.description);
+    } else if (stocking.contents === "special") {
+      // Special room – use a non-damaging feature/hazard to represent RC "Special"
+      const obstacleDef = randomObstacle("feature");
+      dungeon.status = "obstacle";
+      dungeon.obstacle = buildObstacle(obstacleDef);
+      dungeon.encounter = undefined;
+
+      addLogEntry(dungeon, "event", `✨ Special: ${obstacleDef.name}`, obstacleDef.description);
     } else {
-      // Empty room
+      // Empty room (may still hide unguarded treasure per RC, discovered via Search)
       dungeon.status = "idle";
-      dungeon.roomSearched = false; // Reset search state for new room
-      addLogEntry(dungeon, "event", "Empty room", roomResult.description);
+      dungeon.encounter = undefined;
+      dungeon.obstacle = undefined;
+
+      const description = describeEmptyArea(dungeon.areaType, dungeon.intersectionKind);
+      addLogEntry(dungeon, "event", "Empty area", description);
     }
 
     // Advance calendar time
@@ -1130,48 +1155,63 @@ export function searchRoom() {
 
     // Mark room as searched
     dungeon.roomSearched = true;
-
-    // Search results: vary based on thoroughness and luck
-    const searchRoll = rollDie(100);
-
-    if (searchRoll <= 20) {
-      // Found treasure!
-      const loot = Math.max(1, rollFormula("2d6"));
-      dungeon.loot += loot;
-      addLogEntry(dungeon, "loot", "Treasure discovered!", `Found ${loot} gp in a hidden compartment.`);
-    } else if (searchRoll <= 40) {
-      // Found something interesting but not valuable
-      const discoveries = [
-        "Discovered faded runes on the wall describing an ancient curse.",
-        "Found a skeleton clutching a rusted dagger.",
-        "Unearthed a cracked crystal that pulses with faint magic.",
-        "Discovered a hidden inscription: 'The third torch from the left holds the key.'",
-        "Found strange symbols carved into the stone floor.",
-        "Located an old leather-bound book, pages crumbling to dust."
-      ];
-      addLogEntry(dungeon, "event", "Discovery made", discoveries[Math.floor(Math.random() * discoveries.length)]);
-    } else if (searchRoll <= 60) {
-      // Found minor useful item
-      const items = [
-        "Found 1d4 days worth of iron rations in a concealed cache.",
-        "Discovered a flask of oil for torches.",
-        "Located a coil of 50' of rope in good condition.",
-        "Found a tinderbox with flint and steel.",
-        "Unearthed a small sack containing 2d10 copper pieces.",
-        "Located a wineskin filled with fresh water."
-      ];
-      const itemResult = items[Math.floor(Math.random() * items.length)];
-      addLogEntry(dungeon, "event", "Useful item found", itemResult);
+    // If RC Random Stocking indicates hidden unguarded treasure and it hasn't been taken yet,
+    // use the official Unguarded Treasure table (by dungeon level).
+    if (dungeon.roomHasTreasure && !dungeon.roomTreasureClaimed && (!dungeon.roomContents || dungeon.roomContents !== "monster")) {
+      const treasure = generateUnguardedTreasureByLevel(dungeon.depth);
+      if (treasure.totalGold > 0 || treasure.summary) {
+        dungeon.loot += treasure.totalGold;
+        dungeon.roomTreasureClaimed = true;
+        addLogEntry(
+          dungeon,
+          "loot",
+          "Unguarded treasure discovered!",
+          treasure.summary || "You uncover a hidden stash of coins and valuables."
+        );
+      }
     } else {
-      // Nothing found
-      const noFindMessages = [
-        "After thorough searching, nothing of value is found.",
-        "The room has been picked clean by previous explorers.",
-        "Your search reveals only dust and debris.",
-        "No hidden compartments or secret doors are discovered.",
-        "The room yields no secrets to your careful examination."
-      ];
-      addLogEntry(dungeon, "event", "Search complete", noFindMessages[Math.floor(Math.random() * noFindMessages.length)]);
+      // Otherwise fall back to the existing abstract search outcomes
+      const searchRoll = rollDie(100);
+
+      if (searchRoll <= 20) {
+        // Found abstract treasure
+        const loot = Math.max(1, rollFormula("2d6"));
+        dungeon.loot += loot;
+        addLogEntry(dungeon, "loot", "Treasure discovered!", `Found ${loot} gp in a hidden compartment.`);
+      } else if (searchRoll <= 40) {
+        // Found something interesting but not valuable
+        const discoveries = [
+          "Discovered faded runes on the wall describing an ancient curse.",
+          "Found a skeleton clutching a rusted dagger.",
+          "Unearthed a cracked crystal that pulses with faint magic.",
+          "Discovered a hidden inscription: 'The third torch from the left holds the key.'",
+          "Found strange symbols carved into the stone floor.",
+          "Located an old leather-bound book, pages crumbling to dust."
+        ];
+        addLogEntry(dungeon, "event", "Discovery made", discoveries[Math.floor(Math.random() * discoveries.length)]);
+      } else if (searchRoll <= 60) {
+        // Found minor useful item
+        const items = [
+          "Found 1d4 days worth of iron rations in a concealed cache.",
+          "Discovered a flask of oil for torches.",
+          "Located a coil of 50' of rope in good condition.",
+          "Found a tinderbox with flint and steel.",
+          "Unearthed a small sack containing 2d10 copper pieces.",
+          "Located a wineskin filled with fresh water."
+        ];
+        const itemResult = items[Math.floor(Math.random() * items.length)];
+        addLogEntry(dungeon, "event", "Useful item found", itemResult);
+      } else {
+        // Nothing found
+        const noFindMessages = [
+          "After thorough searching, nothing of value is found.",
+          "The area has been picked clean by previous explorers.",
+          "Your search reveals only dust and debris.",
+          "No hidden compartments or secret doors are discovered.",
+          "The area yields no secrets to your careful examination."
+        ];
+        addLogEntry(dungeon, "event", "Search complete", noFindMessages[Math.floor(Math.random() * noFindMessages.length)]);
+      }
     }
 
     // Advance calendar time
@@ -1522,15 +1562,70 @@ function advanceTurn(dungeon: typeof DEFAULT_STATE.dungeon, turns = 1, party?: a
   return turns;
 }
 
-function determineRoomContents(): { type: "empty" | "obstacle" | "encounter"; description?: string } {
-  // BECMI room exploration probabilities:
-  // - 70% empty room
-  // - 20% feature/trap (obstacle)
-  // - 10% contains monsters (placed encounter)
-  const roll = rollDie(100);
+// ------------------------------------------------------------
+// RC Random Stocking helpers
+// ------------------------------------------------------------
 
-  if (roll <= 70) {
-    // Empty room - add some variety in descriptions
+// RC Room Contents Table (Random Stocking, Chapter 17)
+// First 1d6 = contents; second 1d6 = whether treasure is present.
+function rollRoomStocking(): { contents: DungeonRoomContents; hasTreasure: boolean } {
+  const first = rollDie(6);
+  const second = rollDie(6);
+
+  let contents: DungeonRoomContents;
+  if (first <= 2) {
+    contents = "empty";
+  } else if (first === 3) {
+    contents = "trap";
+  } else if (first === 4 || first === 5) {
+    contents = "monster";
+  } else {
+    contents = "special";
+  }
+
+  // Treasure column: "T" entries by contents and second roll
+  let hasTreasure = false;
+  if (contents === "empty") {
+    // 1-2 Empty, treasure on second roll of 1
+    hasTreasure = second === 1;
+  } else if (contents === "trap") {
+    // 3 Trap, treasure on second roll of 1–2
+    hasTreasure = second === 1 || second === 2;
+  } else if (contents === "monster") {
+    // 4-5 Monster, treasure on second roll of 1–3
+    hasTreasure = second >= 1 && second <= 3;
+  } else {
+    // 6 Special – normally no treasure from the Random Stocking table
+    hasTreasure = false;
+  }
+
+  return { contents, hasTreasure };
+}
+
+// Lightweight area type tags for flavor (RC mapping terms)
+function determineAreaType(): { areaType: DungeonAreaType; intersectionKind?: "side_passage" | "t_intersection" | "four_way" } {
+  const roll = rollDie(100);
+  // Simple abstraction: mostly rooms, with occasional corridors and intersections
+  if (roll <= 60) {
+    return { areaType: "room" };
+  }
+  if (roll <= 85) {
+    return { areaType: "corridor" };
+  }
+
+  // Intersection – pick RC-described type
+  const intersectionRoll = rollDie(3);
+  if (intersectionRoll === 1) {
+    return { areaType: "intersection", intersectionKind: "side_passage" };
+  }
+  if (intersectionRoll === 2) {
+    return { areaType: "intersection", intersectionKind: "t_intersection" };
+  }
+  return { areaType: "intersection", intersectionKind: "four_way" };
+}
+
+function describeEmptyArea(areaType: DungeonAreaType, intersectionKind: "side_passage" | "t_intersection" | "four_way" | null | undefined): string {
+  if (areaType === "room") {
     const emptyDescriptions = [
       "The room appears to be empty.",
       "Nothing of interest catches your eye.",
@@ -1539,16 +1634,28 @@ function determineRoomContents(): { type: "empty" | "obstacle" | "encounter"; de
       "An empty chamber with signs of previous habitation.",
       "The room contains only debris and rubble."
     ];
-    return {
-      type: "empty",
-      description: emptyDescriptions[Math.floor(Math.random() * emptyDescriptions.length)]
-    };
-  } else if (roll <= 90) {
-    // Room has a feature or trap
-    return { type: "obstacle" };
-  } else {
-    // Rare: room contains monsters (placed encounter)
-    return { type: "encounter" };
+    return emptyDescriptions[Math.floor(Math.random() * emptyDescriptions.length)];
+  }
+
+  if (areaType === "corridor") {
+    const corridorDescriptions = [
+      "A straight dungeon corridor stretches into the gloom.",
+      "The passageway runs ahead, its walls damp and close.",
+      "You move along a narrow corridor, echoes following your steps.",
+      "The corridor is quiet, lined with old stone blocks and dust."
+    ];
+    return corridorDescriptions[Math.floor(Math.random() * corridorDescriptions.length)];
+  }
+
+  // Intersections use RC mapping terms explicitly
+  switch (intersectionKind) {
+    case "side_passage":
+      return "You come to a side passage: a corridor branches off to one side, but the main corridor continues.";
+    case "t_intersection":
+      return "You reach a T-intersection where the main corridor ends and passages continue left and right.";
+    case "four_way":
+    default:
+      return "You arrive at a four-way intersection where corridors branch off in all directions.";
   }
 }
 
@@ -1661,19 +1768,129 @@ function generateTreasure(type: string): { summary: string; totalGold: number } 
   return { summary: summary.join("; "), totalGold: total };
 }
 
-function convertToGold(kind: string, amount: number): number {
-  switch (kind) {
-    case "cp":
-      return amount / 100;
-    case "sp":
-      return amount / 10;
-    case "ep":
-      return amount / 2;
-    case "pp":
-      return amount * 5;
-    default:
-      return amount;
+// RC Unguarded Treasure Table (Chapter 17, Random Stocking)
+// Used when RC Random Stocking indicates treasure in a room without monsters.
+function generateUnguardedTreasureByLevel(level: number): { summary: string; totalGold: number } {
+  // Determine the appropriate row based on dungeon level
+  // 1; 2-3; 4-5; 6-7; 8+
+  type Row =
+    | { band: "1"; sp: () => number; gp: () => number; gpChance: number; gemChance: number; gemDice: string; jewelryChance: number; jewelryDice: string; magicChance: number; }
+    | { band: "2-3" | "4-5" | "6-7" | "8+"; sp: () => number; gp: () => number; gemChance: number; gemDice: string; jewelryChance: number; jewelryDice: string; magicChance: number; };
+
+  const rows: Row[] = [
+    {
+      band: "1",
+      sp: () => rollFormula("1d6") * 100,
+      gp: () => rollFormula("1d6") * 10,
+      gpChance: 50,
+      gemChance: 5,
+      gemDice: "1d6",
+      jewelryChance: 2,
+      jewelryDice: "1d6",
+      magicChance: 2,
+    },
+    {
+      band: "2-3",
+      sp: () => rollFormula("1d12") * 100,
+      gp: () => rollFormula("1d6") * 100,
+      gemChance: 10,
+      gemDice: "1d6",
+      jewelryChance: 5,
+      jewelryDice: "1d6",
+      magicChance: 8,
+    },
+    {
+      band: "4-5",
+      sp: () => rollFormula("1d6") * 1000,
+      gp: () => rollFormula("1d6") * 200,
+      gemChance: 20,
+      gemDice: "1d8",
+      jewelryChance: 10,
+      jewelryDice: "1d8",
+      magicChance: 10,
+    },
+    {
+      band: "6-7",
+      sp: () => rollFormula("1d6") * 2000,
+      gp: () => rollFormula("1d6") * 500,
+      gemChance: 30,
+      gemDice: "1d10",
+      jewelryChance: 15,
+      jewelryDice: "1d10",
+      magicChance: 15,
+    },
+    {
+      band: "8+",
+      sp: () => rollFormula("1d6") * 5000,
+      gp: () => rollFormula("1d6") * 1000,
+      gemChance: 40,
+      gemDice: "1d12",
+      jewelryChance: 20,
+      jewelryDice: "1d12",
+      magicChance: 20,
+    },
+  ];
+
+  let row: Row;
+  if (level <= 1) row = rows[0];
+  else if (level <= 3) row = rows[1];
+  else if (level <= 5) row = rows[2];
+  else if (level <= 7) row = rows[3];
+  else row = rows[4];
+
+  const parts: string[] = [];
+  let totalGold = 0;
+
+  // Silver pieces are always present
+  const spAmount = row.sp();
+  parts.push(`${spAmount} sp`);
+  totalGold += spAmount / 10; // RC: 10 sp = 1 gp
+
+  // Gold pieces (where applicable)
+  if (row.band === "1") {
+    if (Math.random() * 100 < row.gpChance) {
+      const gpAmount = row.gp();
+      parts.push(`${gpAmount} gp`);
+      totalGold += gpAmount;
+    }
+  } else {
+    const gpAmount = row.gp();
+    parts.push(`${gpAmount} gp`);
+    totalGold += gpAmount;
   }
+
+  // Gems
+  if (Math.random() * 100 < row.gemChance) {
+    const gemCount = rollFormula(row.gemDice);
+    parts.push(`${gemCount}x gems`);
+    // Match lair treasure abstraction: assume 50 gp per gem
+    totalGold += gemCount * 50;
+  }
+
+  // Jewelry
+  if (Math.random() * 100 < row.jewelryChance) {
+    const jewelryCount = rollFormula(row.jewelryDice);
+    parts.push(`${jewelryCount}x jewelry`);
+    // Match lair treasure abstraction: assume 100 gp per jewelry
+    totalGold += jewelryCount * 100;
+  }
+
+  // Magic item: "Any 1" from MAGIC_ITEMS.any
+  if (Math.random() * 100 < row.magicChance) {
+    const list = MAGIC_ITEMS.any ?? [];
+    if (list.length > 0) {
+      const pick = list[Math.floor(Math.random() * list.length)];
+      parts.push(`Magic: ${pick}`);
+    } else {
+      parts.push("Magic: Any 1");
+    }
+  }
+
+  if (parts.length === 0) {
+    parts.push("No treasure found");
+  }
+
+  return { summary: parts.join("; "), totalGold };
 }
 
 // Look up a character's weapon damage based on their equipped weapon and the equipment tables
@@ -1871,21 +2088,6 @@ function applyMonsterSpecialEffectsOnHit(
   }
 }
 
-function convertToGold(kind: string, amount: number): number {
-  switch (kind) {
-    case "cp":
-      return amount / 100;
-    case "sp":
-      return amount / 10;
-    case "ep":
-      return amount / 2;
-    case "pp":
-      return amount * 5;
-    default:
-      return amount;
-  }
-}
-
 // BECMI Monster XP Table (simplified - base XP by HD, modified by special abilities)
 function calculateMonsterXP(encounter: DungeonEncounter): number {
   const hd = encounter.hitDice;
@@ -1963,8 +2165,14 @@ function normalizeDungeonState(raw: DungeonState | undefined): DungeonState {
     lairMode: raw?.lairMode ?? false,
     lighting: raw?.lighting ?? "dim",
     status: raw?.status ?? "idle",
+    areaType: raw?.areaType ?? "room",
+    intersectionKind: raw?.intersectionKind ?? null,
+    roomContents: raw?.roomContents ?? "empty",
+    roomHasTreasure: raw?.roomHasTreasure ?? false,
+    roomTreasureClaimed: raw?.roomTreasureClaimed ?? false,
     encounter: raw?.encounter,
     obstacle: raw?.obstacle,
+    roomSearched: raw?.roomSearched ?? false,
     log: raw?.log ?? [],
   };
 }

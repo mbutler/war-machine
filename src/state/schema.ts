@@ -1,6 +1,6 @@
 import { INITIAL_MERCHANT_STATE } from "./initialMerchant";
 
-export const STATE_VERSION = "1.0.1";
+export const STATE_VERSION = "1.0.2";
 
 export type Alignment = "Lawful" | "Neutral" | "Chaotic";
 
@@ -531,6 +531,15 @@ export type DungeonStatus = "idle" | "surprise" | "encounter" | "obstacle" | "lo
 export type LightingCondition = "bright" | "dim" | "dark";
 export type EncounterReaction = "hostile" | "aggressive" | "cautious" | "neutral" | "friendly";
 
+// Lightweight dungeon area abstractions (RC mapping terms)
+export type DungeonAreaType = "room" | "corridor" | "intersection";
+
+// Based on RC mapping guidance: side passages, T-intersections, four-way intersections
+export type DungeonIntersectionKind = "side_passage" | "t_intersection" | "four_way";
+
+// RC Random Stocking – high‑level room contents categories
+export type DungeonRoomContents = "empty" | "trap" | "monster" | "special";
+
 export interface SurpriseState {
   partyRoll: number;
   monsterRoll: number;
@@ -610,6 +619,13 @@ export interface DungeonState {
   lairMode: boolean;
   lighting: LightingCondition; // Affects encounter distance
   status: DungeonStatus;
+  // Abstract area description (not a precise map)
+  areaType: DungeonAreaType;
+  intersectionKind?: DungeonIntersectionKind | null;
+  // RC Random Stocking metadata for the current area
+  roomContents?: DungeonRoomContents;
+  roomHasTreasure?: boolean;
+  roomTreasureClaimed?: boolean;
   encounter?: DungeonEncounter;
   obstacle?: DungeonObstacle;
   roomSearched: boolean; // Whether current room has been searched
@@ -932,6 +948,11 @@ export const DEFAULT_STATE: WarMachineState = {
     lairMode: false,
     lighting: "dim",
     status: "idle",
+    areaType: "room",
+    intersectionKind: null,
+    roomContents: "empty",
+    roomHasTreasure: false,
+    roomTreasureClaimed: false,
     roomSearched: false,
     log: [],
   },
