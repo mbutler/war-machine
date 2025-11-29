@@ -415,9 +415,10 @@ function renderEncounterPanel(dungeon = getDungeonState(), party = getPartyState
     actions.className = "flex gap-sm";
     actions.style.marginTop = "var(--space-sm)";
     actions.append(
+      makeButton("🚪 Evade (Table)", "button", () => evadeEncounter()),
       makeButton("⚔️ Fight", "button", () => resolveEncounter("fight")),
       makeButton("🗣️ Parley", "button", () => resolveEncounter("parley")),
-      makeButton("🏃 Flee", "button", () => resolveEncounter("flee")),
+      makeButton("🏃 Flee (Run)", "button", () => resolveEncounter("flee")),
     );
     panel.appendChild(actions);
   }

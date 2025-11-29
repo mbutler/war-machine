@@ -239,19 +239,68 @@ export function evadeEncounter() {
   updateState((state) => {
     const dungeon = state.dungeon;
     const encounter = dungeon.encounter;
+    const party = state.party.roster;
     
     if (!encounter) return;
     
-    // Evasion is automatic if party surprised the monsters
+    const livingParty = party.filter((c: any) => c.derivedStats?.hp?.current > 0);
+    if (!livingParty.length) return;
+    
+    // BECMI Evasion Checklist, Step 2:
+    // If evaders are not surprised and the other side IS surprised, evasion is automatic.
     if (encounter.surprise?.monsterSurprised && !encounter.surprise?.partySurprised) {
-      addLogEntry(dungeon, "event", "Evasion Successful", "You slip away before the monsters notice you.");
+      addLogEntry(
+        dungeon,
+        "event",
+        "Evasion successful",
+        "You slip away before the monsters notice you.",
+      );
       dungeon.status = "idle";
       dungeon.encounter = undefined;
       return;
     }
     
-    // Otherwise, need to attempt flight (handled by flee mechanics)
-    addLogEntry(dungeon, "event", "Cannot Evade", "The monsters are aware of you. You must flee if you want to escape.");
+    // Step 3: Decision to pursue – monsters must make a morale check to see if they give chase.
+    // checkMonsterMorale returns true if monsters flee (morale failed), false if they stand.
+    const monstersFleeInstead = checkMonsterMorale(dungeon, "pursuit_decision");
+    if (monstersFleeInstead) {
+      // Monsters have broken and run; encounter already cleared by morale logic.
+      addLogEntry(
+        dungeon,
+        "event",
+        "Evasion successful",
+        "The monsters lose their nerve and do not pursue.",
+      );
+      return;
+    }
+    
+    // Step 4: Attempt to Evade – use the BECMI Evasion Table to determine chance, then roll d100.
+    const partyCount = livingParty.length;
+    const monsterCount = estimateMonsterCount(encounter);
+    const baseChance = getDungeonEvasionChance(partyCount, monsterCount);
+    const roll = rollDie(100);
+    
+    if (roll <= baseChance) {
+      addLogEntry(
+        dungeon,
+        "combat",
+        "Evasion successful",
+        `Rolled ${roll} vs ${baseChance}% chance on the Evasion Table. You escape into the dungeon's twists and shadows.`,
+      );
+      dungeon.status = "idle";
+      dungeon.encounter = undefined;
+    } else {
+      addLogEntry(
+        dungeon,
+        "combat",
+        "Evasion failed",
+        `Rolled ${roll} vs ${baseChance}% chance on the Evasion Table. The pursuers keep up – you have not escaped.`,
+      );
+      // RAW: pursuit continues in rounds at running speed.
+      // In this abstraction, we leave the encounter active and let the party choose
+      // to fight or attempt to flee (running under fire) in subsequent rounds.
+      dungeon.status = "encounter";
+    }
   });
 }
 
@@ -1010,6 +1059,60 @@ function checkMonsterMorale(dungeon: typeof DEFAULT_STATE.dungeon, trigger: stri
     `${encounter.name} continue fighting (Rolled ${moraleRoll} vs morale ${adjustedMorale})`
   );
   return false;
+}
+
+// ------------------------------------------------------------
+// BECMI Evasion Table helpers (Dungeon-scale evasion)
+// ------------------------------------------------------------
+
+function estimateMonsterCount(encounter: DungeonEncounter): number {
+  const hpPerMonster = Math.max(1, Math.round(encounter.hitDice * 4.5));
+  return Math.max(1, Math.round(encounter.hpMax / hpPerMonster));
+}
+
+function getDungeonEvasionChance(partySize: number, monsterCount: number): number {
+  let chance = 0;
+  
+  if (partySize <= 4) {
+    if (monsterCount === 1) {
+      chance = 50;
+    } else if (monsterCount >= 2 && monsterCount <= 3) {
+      chance = 70;
+    } else if (monsterCount >= 4) {
+      chance = 90;
+    }
+  } else if (partySize <= 12) {
+    if (monsterCount >= 1 && monsterCount <= 3) {
+      chance = 35;
+    } else if (monsterCount >= 4 && monsterCount <= 8) {
+      chance = 50;
+    } else if (monsterCount >= 9) {
+      chance = 70;
+    }
+  } else if (partySize <= 24) {
+    if (monsterCount >= 1 && monsterCount <= 6) {
+      chance = 25;
+    } else if (monsterCount >= 7 && monsterCount <= 16) {
+      chance = 35;
+    } else if (monsterCount >= 17) {
+      chance = 50;
+    }
+  } else {
+    // 25+ characters
+    if (monsterCount >= 1 && monsterCount <= 10) {
+      chance = 10;
+    } else if (monsterCount >= 11 && monsterCount <= 30) {
+      chance = 25;
+    } else if (monsterCount >= 31) {
+      chance = 35;
+    }
+  }
+  
+  // Important note from RC: minimum 5% chance to evade regardless of penalties.
+  if (chance <= 0) {
+    chance = 5;
+  }
+  return Math.max(5, Math.min(95, chance));
 }
 
 export function searchRoom() {
