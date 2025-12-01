@@ -320,7 +320,8 @@ export interface CalendarState {
 }
 
 export type SiegeQuality = 5 | 10 | 15;
-export type SiegeTactic = "attack" | "envelop" | "trap" | "hold" | "withdraw";
+export type SiegeTactic = "bombard" | "harass" | "assault" | "depart";
+export type FatigueLevel = "none" | "moderate" | "serious";
 
 export interface SiegeForce {
   name: string;
@@ -339,13 +340,29 @@ export interface SiegeForce {
   missiles: boolean;
   magic: boolean;
   flyers: boolean;
+  fatigue: FatigueLevel;
   siegeEngines: {
     ltCatapult: number;
     hvCatapult: number;
     ram: number;
     tower: number;
     ballista: number;
+    timberFort: number;
+    mantlet: number;
+    ladder: number;
+    hoist: number;
+    belfry: number;
+    gallery: number;
   };
+  // Siege accounting
+  treasury: number;
+  ammunition: {
+    ltCatapult: number;
+    hvCatapult: number;
+    ballista: number;
+  };
+  rations: number;
+  clerics: number;
 }
 
 export interface SiegeModifiers {
@@ -383,9 +400,40 @@ export interface SiegeBattleLogEntry {
   recoveryDays?: number;
 }
 
+export interface SiegeFortification {
+  name: string;
+  walls: {
+    length: number; // feet
+    height: number; // feet
+    thickness: number; // feet
+    hp: number;
+    maxHp: number;
+  };
+  towers: {
+    count: number;
+    hp: number;
+    maxHp: number;
+  };
+  gates: {
+    count: number;
+    hp: number;
+    maxHp: number;
+  };
+  moat: boolean;
+  drawbridge: boolean;
+}
+
+export interface SiegeTurn {
+  week: number;
+  phase: "setup" | "costs" | "tactics" | "resolution" | "results";
+  hasResolved: boolean;
+}
+
 export interface SiegeState {
   attacker: SiegeForce;
   defender: SiegeForce;
+  fortification: SiegeFortification;
+  turn: SiegeTurn;
   tactics: {
     attacker: SiegeTactic;
     defender: SiegeTactic;
@@ -816,13 +864,28 @@ const SIEGE_DEFAULT_STATE: SiegeState = {
     missiles: false,
     magic: false,
     flyers: false,
+    fatigue: "none",
     siegeEngines: {
       ltCatapult: 0,
       hvCatapult: 0,
       ram: 0,
       tower: 0,
       ballista: 0,
+      timberFort: 0,
+      mantlet: 0,
+      ladder: 0,
+      hoist: 0,
+      belfry: 0,
+      gallery: 0,
     },
+    treasury: 50000,
+    ammunition: {
+      ltCatapult: 0,
+      hvCatapult: 0,
+      ballista: 0,
+    },
+    rations: 4000,
+    clerics: 0,
   },
   defender: {
     name: "Elven Garrison",
@@ -841,17 +904,59 @@ const SIEGE_DEFAULT_STATE: SiegeState = {
     missiles: true,
     magic: true,
     flyers: false,
+    fatigue: "none",
     siegeEngines: {
       ltCatapult: 0,
       hvCatapult: 0,
       ram: 0,
       tower: 0,
       ballista: 2,
+      timberFort: 0,
+      mantlet: 0,
+      ladder: 0,
+      hoist: 0,
+      belfry: 0,
+      gallery: 0,
     },
+    treasury: 25000,
+    ammunition: {
+      ltCatapult: 0,
+      hvCatapult: 0,
+      ballista: 16, // 2 ballistas × 8 weeks
+    },
+    rations: 2500,
+    clerics: 3,
+  },
+  fortification: {
+    name: "Stone Keep",
+    walls: {
+      length: 400,
+      height: 30,
+      thickness: 10,
+      hp: 2000,
+      maxHp: 2000,
+    },
+    towers: {
+      count: 4,
+      hp: 300,
+      maxHp: 300,
+    },
+    gates: {
+      count: 1,
+      hp: 150,
+      maxHp: 150,
+    },
+    moat: true,
+    drawbridge: true,
+  },
+  turn: {
+    week: 1,
+    phase: "setup",
+    hasResolved: false,
   },
   tactics: {
-    attacker: "attack",
-    defender: "attack",
+    attacker: "harass",
+    defender: "harass",
   },
   modifiers: {
     attacker: {

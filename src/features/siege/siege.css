@@ -202,3 +202,33 @@ summary {
   justify-content: flex-end;
 }
 
+.siege-turn-info {
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  font-size: 0.875rem;
+}
+
+.siege-turn-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.siege-fortification-info {
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  font-size: 0.875rem;
+}
+
+.siege-fort-display {
+  line-height: 1.4;
+}
+
+.siege-turn-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+

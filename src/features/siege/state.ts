@@ -42,6 +42,36 @@ export function updateSiegeEngine(force: ForceKey, engine: EngineKey, value: num
   });
 }
 
+export function updateForceFatigue(force: ForceKey, fatigue: FatigueLevel) {
+  mutateSiege((draft) => {
+    draft[force].fatigue = fatigue;
+  });
+}
+
+export function updateForceTreasury(force: ForceKey, treasury: number) {
+  mutateSiege((draft) => {
+    draft[force].treasury = Math.max(0, treasury);
+  });
+}
+
+export function updateForceAmmunition(force: ForceKey, ammoType: "ltCatapult" | "hvCatapult" | "ballista", amount: number) {
+  mutateSiege((draft) => {
+    draft[force].ammunition[ammoType] = Math.max(0, amount);
+  });
+}
+
+export function updateForceRations(force: ForceKey, rations: number) {
+  mutateSiege((draft) => {
+    draft[force].rations = Math.max(0, rations);
+  });
+}
+
+export function updateForceClerics(force: ForceKey, clerics: number) {
+  mutateSiege((draft) => {
+    draft[force].clerics = Math.max(0, clerics);
+  });
+}
+
 export function updateTactic(role: ForceKey, tactic: SiegeTactic) {
   mutateSiege((draft) => {
     draft.tactics[role] = tactic;
@@ -115,6 +145,111 @@ function calculateRecoveryDays(attackerLosses: number, defenderLosses: number): 
   return Math.max(1, Math.ceil(total / 200));
 }
 
+// Siege Accounting Functions
+export function deductWeeklyCosts() {
+  mutateSiege((draft) => {
+    // Deduct weekly payroll (1/4 of monthly mercenary rates)
+    // Assuming standard rates from BECMI Chapter 11
+    const attackerPayroll = Math.floor((draft.attacker.troops * 1) / 4); // 1 gp/month per troop = 0.25 gp/week
+    const defenderPayroll = Math.floor((draft.defender.troops * 1) / 4);
+
+    draft.attacker.treasury = Math.max(0, draft.attacker.treasury - attackerPayroll);
+    draft.defender.treasury = Math.max(0, draft.defender.treasury - defenderPayroll);
+
+    // Deduct rations (1 week per person)
+    draft.attacker.rations = Math.max(0, draft.attacker.rations - draft.attacker.troops);
+    draft.defender.rations = Math.max(0, draft.defender.rations - draft.defender.troops);
+
+    // Apply fatigue from inadequate rations
+    if (draft.attacker.rations <= 0) {
+      if (draft.attacker.fatigue === "none") draft.attacker.fatigue = "moderate";
+      else if (draft.attacker.fatigue === "moderate") draft.attacker.fatigue = "serious";
+    }
+    if (draft.defender.rations <= 0) {
+      if (draft.defender.fatigue === "none") draft.defender.fatigue = "moderate";
+      else if (draft.defender.fatigue === "moderate") draft.defender.fatigue = "serious";
+    }
+
+    // Deduct ammunition based on usage (simplified)
+    // In full implementation, this would be based on actual weapon usage
+    if (draft.attacker.siegeEngines.ltCatapult > 0) {
+      draft.attacker.ammunition.ltCatapult = Math.max(0, draft.attacker.ammunition.ltCatapult - 4);
+    }
+    if (draft.attacker.siegeEngines.hvCatapult > 0) {
+      draft.attacker.ammunition.hvCatapult = Math.max(0, draft.attacker.ammunition.hvCatapult - 6);
+    }
+    if (draft.attacker.siegeEngines.ballista > 0) {
+      draft.attacker.ammunition.ballista = Math.max(0, draft.attacker.ammunition.ballista - 2);
+    }
+    if (draft.defender.siegeEngines.ballista > 0) {
+      draft.defender.ammunition.ballista = Math.max(0, draft.defender.ammunition.ballista - 2);
+    }
+
+    // Advance siege turn
+    draft.turn.week += 1;
+    draft.turn.hasResolved = false;
+  });
+}
+
+export function gatherAmmunition() {
+  mutateSiege((draft) => {
+    // Simplified ammunition gathering
+    // Attacker can gather from spent artillery
+    const attackerArtillery = draft.attacker.siegeEngines.ltCatapult + draft.attacker.siegeEngines.hvCatapult;
+    if (attackerArtillery > 0) {
+      const gathered = Math.floor(attackerArtillery / 2); // Half of weapons fired
+      draft.attacker.ammunition.ltCatapult += gathered;
+      draft.attacker.ammunition.hvCatapult += gathered;
+    }
+  });
+}
+
+export function advanceSiegeTurn() {
+  deductWeeklyCosts();
+  gatherAmmunition();
+}
+
+// Fortification Damage Functions
+export function applyFortificationDamage(damage: number, target: "walls" | "towers" | "gates") {
+  mutateSiege((draft) => {
+    const fort = draft.fortification;
+    if (target === "walls") {
+      fort.walls.hp = Math.max(0, fort.walls.hp - damage);
+    } else if (target === "towers") {
+      fort.towers.hp = Math.max(0, fort.towers.hp - damage);
+    } else if (target === "gates") {
+      fort.gates.hp = Math.max(0, fort.gates.hp - damage);
+    }
+  });
+}
+
+export function checkFortificationBreach(): { breached: boolean; target: string } {
+  const state = getSiegeState();
+  const fort = state.fortification;
+
+  if (fort.walls.hp <= fort.walls.maxHp * 0.5) {
+    return { breached: true, target: "walls" };
+  }
+  if (fort.towers.hp <= fort.towers.maxHp * 0.5) {
+    return { breached: true, target: "towers" };
+  }
+  if (fort.gates.hp <= 0) {
+    return { breached: true, target: "gates" };
+  }
+
+  return { breached: false, target: "" };
+}
+
+export function calculateSiegeWeaponDamage(weaponType: "ltCatapult" | "hvCatapult" | "trebuchet"): number {
+  // Simplified damage calculation based on BECMI
+  switch (weaponType) {
+    case "ltCatapult": return Math.floor(Math.random() * 8) + 8; // 1d8+8
+    case "hvCatapult": return Math.floor(Math.random() * 10) + 10; // 1d10+10
+    case "trebuchet": return Math.floor(Math.random() * 12) + 13; // 1d12+13
+    default: return 10;
+  }
+}
+
 onCalendarEvent((event) => {
   if (event.type !== "timers-expired") {
     return;
@@ -181,8 +316,20 @@ export function importSiegeData(raw: string) {
 function normalizeSiegeState(data: Partial<SiegeState>): SiegeState {
   const defaults = createDefaultSiegeState();
   return {
-    attacker: data.attacker ?? defaults.attacker,
-    defender: data.defender ?? defaults.defender,
+    attacker: data.attacker ? {
+      ...defaults.attacker,
+      ...data.attacker,
+      siegeEngines: { ...defaults.attacker.siegeEngines, ...(data.attacker.siegeEngines || {}) },
+      ammunition: { ...defaults.attacker.ammunition, ...(data.attacker.ammunition || {}) },
+    } : defaults.attacker,
+    defender: data.defender ? {
+      ...defaults.defender,
+      ...data.defender,
+      siegeEngines: { ...defaults.defender.siegeEngines, ...(data.defender.siegeEngines || {}) },
+      ammunition: { ...defaults.defender.ammunition, ...(data.defender.ammunition || {}) },
+    } : defaults.defender,
+    fortification: data.fortification ?? defaults.fortification,
+    turn: data.turn ?? defaults.turn,
     tactics: data.tactics ?? defaults.tactics,
     modifiers: data.modifiers ?? defaults.modifiers,
     log: Array.isArray(data.log)

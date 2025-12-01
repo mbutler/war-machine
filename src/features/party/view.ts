@@ -121,7 +121,7 @@ function renderCharacterRow(character: Character, preferences: PartyPreferences)
 
     const lbl = document.createElement("div");
     lbl.className = "stat-label";
-    lbl.textContent = label;
+    lbl.textContent = String(label || "");
     stat.appendChild(lbl);
 
     const val = document.createElement("div");

@@ -2,7 +2,7 @@ import { createPanel } from "../../layout/panels";
 import { showNotification } from "../../layout/notifications";
 import type { SiegeBattleLogEntry, SiegeState } from "../../state/schema";
 import { QUALITY_OPTIONS, TACTIC_OPTIONS } from "./constants";
-import { calculateForceTotals, getTacticAdvantage } from "./logic";
+import { calculateForceTotals } from "./logic";
 import {
   applySiegeCasualties,
   clearSiegeLog,
@@ -13,6 +13,12 @@ import {
   updateModifier,
   updateSiegeEngine,
   updateTactic,
+  updateForceFatigue,
+  updateForceTreasury,
+  updateForceAmmunition,
+  updateForceRations,
+  updateForceClerics,
+  advanceSiegeTurn,
   exportSiegeData,
   importSiegeData,
 } from "./state";
@@ -37,7 +43,12 @@ interface ForceControls {
   missiles: HTMLInputElement;
   magic: HTMLInputElement;
   flyers: HTMLInputElement;
-  siegeEngines: Record<"ltCatapult" | "hvCatapult" | "ram" | "tower" | "ballista", HTMLInputElement>;
+  fatigue: HTMLSelectElement;
+  treasury: HTMLInputElement;
+  rations: HTMLInputElement;
+  clerics: HTMLInputElement;
+  ammunition: Record<"ltCatapult" | "hvCatapult" | "ballista", HTMLInputElement>;
+  siegeEngines: Record<"ltCatapult" | "hvCatapult" | "ram" | "tower" | "ballista" | "timberFort" | "mantlet" | "ladder" | "hoist" | "belfry" | "gallery", HTMLInputElement>;
   stats: {
     base: HTMLElement;
     classBonus: HTMLElement;
@@ -68,6 +79,43 @@ export function renderSiegePanel(target: HTMLElement) {
   const battleCard = document.createElement("div");
   battleCard.className = "siege-card";
   battleColumn.appendChild(battleCard);
+
+  const turnHeader = document.createElement("div");
+  turnHeader.className = "section-title";
+  turnHeader.textContent = "Siege Turn";
+  battleCard.appendChild(turnHeader);
+
+  const turnInfo = document.createElement("div");
+  turnInfo.className = "siege-turn-info";
+  battleCard.appendChild(turnInfo);
+
+  const fortificationHeader = document.createElement("div");
+  fortificationHeader.className = "section-title";
+  fortificationHeader.textContent = "Fortification";
+  battleCard.appendChild(fortificationHeader);
+
+  const fortificationInfo = document.createElement("div");
+  fortificationInfo.className = "siege-fortification-info";
+  battleCard.appendChild(fortificationInfo);
+
+  const turnControls = document.createElement("div");
+  turnControls.className = "siege-turn-controls";
+  battleCard.appendChild(turnControls);
+
+  const advanceTurnBtn = document.createElement("button");
+  advanceTurnBtn.type = "button";
+  advanceTurnBtn.className = "button";
+  advanceTurnBtn.textContent = "Advance Turn";
+  advanceTurnBtn.addEventListener("click", () => {
+    advanceSiegeTurn();
+    showNotification({
+      title: "Turn Advanced",
+      message: "Weekly costs deducted, ammunition gathered.",
+      variant: "info",
+    });
+  });
+
+  turnControls.appendChild(advanceTurnBtn);
 
   const tacticsHeader = document.createElement("div");
   tacticsHeader.className = "section-title";
@@ -199,6 +247,27 @@ export function renderSiegePanel(target: HTMLElement) {
     defenderTacticSelect.value = state.tactics.defender;
     tacticAdvantage.textContent = formatAdvantage(state.tactics.attacker, state.tactics.defender);
     syncModifiers(state);
+
+    // Update turn information
+    turnInfo.innerHTML = `
+      <div class="siege-turn-display">
+        <strong>Week ${state.turn.week}</strong> - Phase: ${state.turn.phase}
+        ${state.turn.hasResolved ? '(Resolved)' : '(Pending)'}
+      </div>
+    `;
+
+    // Update fortification information
+    const fort = state.fortification;
+    fortificationInfo.innerHTML = `
+      <div class="siege-fort-display">
+        <div><strong>${fort.name}</strong></div>
+        <div>Walls: ${fort.walls.hp}/${fort.walls.maxHp} HP (${fort.walls.length}' × ${fort.walls.height}' × ${fort.walls.thickness}' thick)</div>
+        <div>Towers: ${fort.towers.hp}/${fort.towers.maxHp} HP (${fort.towers.count} towers)</div>
+        <div>Gates: ${fort.gates.hp}/${fort.gates.maxHp} HP (${fort.gates.count} gates)</div>
+        <div>Features: ${fort.moat ? 'Moat' : 'No moat'}, ${fort.drawbridge ? 'Drawbridge' : 'No drawbridge'}</div>
+      </div>
+    `;
+
     renderLog(state.log);
   }
 
@@ -268,8 +337,24 @@ export function renderSiegePanel(target: HTMLElement) {
     });
     qualitySelect.addEventListener("change", () => updateForceField(key, "quality", Number(qualitySelect.value) as any));
 
+    const fatigueSelect = document.createElement("select");
+    fatigueSelect.className = "input";
+    const fatigueOptions = [
+      { value: "none", label: "No Fatigue" },
+      { value: "moderate", label: "Moderate Fatigue (-10)" },
+      { value: "serious", label: "Serious Fatigue (-30)" },
+    ];
+    fatigueOptions.forEach((option) => {
+      const opt = document.createElement("option");
+      opt.value = option.value;
+      opt.textContent = option.label;
+      fatigueSelect.appendChild(opt);
+    });
+    fatigueSelect.addEventListener("change", () => updateForceFatigue(key, fatigueSelect.value as any));
+
     trainBody.append(
       createRow([createField("Weeks Training", trainingWeeks), createField("Quality", qualitySelect)]),
+      createRow([createField("Fatigue", fatigueSelect)]),
     );
 
     const checkboxGrid = document.createElement("div");
@@ -296,6 +381,24 @@ export function renderSiegePanel(target: HTMLElement) {
     trainBody.appendChild(checkboxGrid);
     card.appendChild(trainingDetails);
 
+    const accountingDetails = document.createElement("details");
+    const accountingSummary = document.createElement("summary");
+    accountingSummary.textContent = "Siege Accounting";
+    accountingDetails.appendChild(accountingSummary);
+    const accountingBody = document.createElement("div");
+    accountingBody.className = "siege-details-body";
+    accountingDetails.appendChild(accountingBody);
+    card.appendChild(accountingDetails);
+
+    const treasuryInput = createNumberInput((value) => updateForceTreasury(key, value));
+    const rationsInput = createNumberInput((value) => updateForceRations(key, value));
+    const clericsInput = createNumberInput((value) => updateForceClerics(key, value));
+
+    accountingBody.append(
+      createRow([createField("Treasury (gp)", treasuryInput), createField("Rations", rationsInput)]),
+      createRow([createField("Clerics", clericsInput)]),
+    );
+
     const engineDetails = document.createElement("details");
     const engineSummary = document.createElement("summary");
     engineSummary.textContent = "Siege Engines";
@@ -305,18 +408,47 @@ export function renderSiegePanel(target: HTMLElement) {
     engineDetails.appendChild(engineBody);
     card.appendChild(engineDetails);
 
-    const engineFields: Record<"ltCatapult" | "hvCatapult" | "ram" | "tower" | "ballista", HTMLInputElement> = {
+    const engineFields: Record<"ltCatapult" | "hvCatapult" | "ram" | "tower" | "ballista" | "timberFort" | "mantlet" | "ladder" | "hoist" | "belfry" | "gallery", HTMLInputElement> = {
       ltCatapult: createNumberInput((value) => updateSiegeEngine(key, "ltCatapult", value)),
       hvCatapult: createNumberInput((value) => updateSiegeEngine(key, "hvCatapult", value)),
       ram: createNumberInput((value) => updateSiegeEngine(key, "ram", value)),
       tower: createNumberInput((value) => updateSiegeEngine(key, "tower", value)),
       ballista: createNumberInput((value) => updateSiegeEngine(key, "ballista", value)),
+      timberFort: createNumberInput((value) => updateSiegeEngine(key, "timberFort", value)),
+      mantlet: createNumberInput((value) => updateSiegeEngine(key, "mantlet", value)),
+      ladder: createNumberInput((value) => updateSiegeEngine(key, "ladder", value)),
+      hoist: createNumberInput((value) => updateSiegeEngine(key, "hoist", value)),
+      belfry: createNumberInput((value) => updateSiegeEngine(key, "belfry", value)),
+      gallery: createNumberInput((value) => updateSiegeEngine(key, "gallery", value)),
     };
+
+    const ammunitionFields: Record<"ltCatapult" | "hvCatapult" | "ballista", HTMLInputElement> = {
+      ltCatapult: createNumberInput((value) => updateForceAmmunition(key, "ltCatapult", value)),
+      hvCatapult: createNumberInput((value) => updateForceAmmunition(key, "hvCatapult", value)),
+      ballista: createNumberInput((value) => updateForceAmmunition(key, "ballista", value)),
+    };
+
     engineBody.append(
       createRow([createField("Lt. Catapult", engineFields.ltCatapult), createField("Hv. Catapult", engineFields.hvCatapult)]),
       createRow([createField("Ram/Bore", engineFields.ram), createField("Tower", engineFields.tower)]),
-      createField("Ballista", engineFields.ballista),
+      createRow([createField("Ballista", engineFields.ballista), createField("Belfry", engineFields.belfry)]),
+      createRow([createField("Timber Fort", engineFields.timberFort), createField("Mantlet", engineFields.mantlet)]),
+      createRow([createField("Ladder", engineFields.ladder), createField("Hoist", engineFields.hoist)]),
+      createField("Gallery", engineFields.gallery),
     );
+
+    // Add ammunition tracking
+    const ammoSection = document.createElement("div");
+    ammoSection.className = "siege-ammo-section";
+    const ammoTitle = document.createElement("div");
+    ammoTitle.className = "control-title";
+    ammoTitle.textContent = "Ammunition";
+    ammoSection.appendChild(ammoTitle);
+    ammoSection.append(
+      createRow([createField("Lt. Catapult Ammo", ammunitionFields.ltCatapult), createField("Hv. Catapult Ammo", ammunitionFields.hvCatapult)]),
+      createField("Ballista Ammo", ammunitionFields.ballista),
+    );
+    engineBody.appendChild(ammoSection);
 
     const statBox = document.createElement("div");
     statBox.className = "siege-stat-box";
@@ -344,6 +476,11 @@ export function renderSiegePanel(target: HTMLElement) {
       missiles: checkboxControls.missiles,
       magic: checkboxControls.magic,
       flyers: checkboxControls.flyers,
+      fatigue: fatigueSelect,
+      treasury: treasuryInput,
+      rations: rationsInput,
+      clerics: clericsInput,
+      ammunition: ammunitionFields,
       siegeEngines: engineFields,
       stats: {
         base: baseStat.value,
@@ -463,11 +600,24 @@ export function renderSiegePanel(target: HTMLElement) {
     controls.missiles.checked = force.missiles;
     controls.magic.checked = force.magic;
     controls.flyers.checked = force.flyers;
-    controls.siegeEngines.ltCatapult.value = String(force.siegeEngines.ltCatapult);
-    controls.siegeEngines.hvCatapult.value = String(force.siegeEngines.hvCatapult);
-    controls.siegeEngines.ram.value = String(force.siegeEngines.ram);
-    controls.siegeEngines.tower.value = String(force.siegeEngines.tower);
-    controls.siegeEngines.ballista.value = String(force.siegeEngines.ballista);
+    controls.fatigue.value = force.fatigue;
+    controls.treasury.value = String(force.treasury);
+    controls.rations.value = String(force.rations);
+    controls.clerics.value = String(force.clerics);
+    controls.ammunition.ltCatapult.value = String(force.ammunition?.ltCatapult ?? 0);
+    controls.ammunition.hvCatapult.value = String(force.ammunition?.hvCatapult ?? 0);
+    controls.ammunition.ballista.value = String(force.ammunition?.ballista ?? 0);
+    controls.siegeEngines.ltCatapult.value = String(force.siegeEngines?.ltCatapult ?? 0);
+    controls.siegeEngines.hvCatapult.value = String(force.siegeEngines?.hvCatapult ?? 0);
+    controls.siegeEngines.ram.value = String(force.siegeEngines?.ram ?? 0);
+    controls.siegeEngines.tower.value = String(force.siegeEngines?.tower ?? 0);
+    controls.siegeEngines.ballista.value = String(force.siegeEngines?.ballista ?? 0);
+    controls.siegeEngines.timberFort.value = String(force.siegeEngines?.timberFort ?? 0);
+    controls.siegeEngines.mantlet.value = String(force.siegeEngines?.mantlet ?? 0);
+    controls.siegeEngines.ladder.value = String(force.siegeEngines?.ladder ?? 0);
+    controls.siegeEngines.hoist.value = String(force.siegeEngines?.hoist ?? 0);
+    controls.siegeEngines.belfry.value = String(force.siegeEngines?.belfry ?? 0);
+    controls.siegeEngines.gallery.value = String(force.siegeEngines?.gallery ?? 0);
   }
 
   function updateStats(controls: ForceControls, totals: ReturnType<typeof calculateForceTotals>) {
@@ -489,10 +639,16 @@ export function renderSiegePanel(target: HTMLElement) {
   }
 
   function formatAdvantage(att: string, def: string) {
-    const mod = getTacticAdvantage(att as any, def as any);
-    if (mod > 0) return `Attacker advantage (+${mod})`;
-    if (mod < 0) return `Defender advantage (+${Math.abs(mod)})`;
-    return "No tactical advantage";
+    // Siege tactics don't have tactical advantages like War Machine tactics
+    // Instead, each tactic provides specific BR bonuses
+    const attackerTactic = att as SiegeTactic;
+    const defenderTactic = def as SiegeTactic;
+
+    if (attackerTactic === "assault") return "Attacker assault bonus (+5%)";
+    if (attackerTactic === "depart") return "Attacker departing siege";
+    if (attackerTactic === "bombard") return "Artillery duel";
+    if (attackerTactic === "harass") return "Harassment tactics";
+    return "Siege tactics set";
   }
 }
 

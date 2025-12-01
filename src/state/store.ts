@@ -304,6 +304,8 @@ function ensureSiegeState(state?: SiegeState): SiegeState {
   return {
     attacker: sanitizeForce(state.attacker, defaults.attacker),
     defender: sanitizeForce(state.defender, defaults.defender),
+    fortification: state.fortification ?? defaults.fortification,
+    turn: state.turn ?? defaults.turn,
     tactics: {
       attacker: sanitizeTactic(state.tactics?.attacker, defaults.tactics.attacker),
       defender: sanitizeTactic(state.tactics?.defender, defaults.tactics.defender),
@@ -394,6 +396,7 @@ function sanitizeForce(force: SiegeForce | undefined, fallback: SiegeForce): Sie
     return JSON.parse(JSON.stringify(fallback));
   }
   const engines = force.siegeEngines ?? {};
+  const ammunition = force.ammunition ?? {};
   return {
     name: typeof force.name === "string" ? force.name : fallback.name,
     troops: typeof force.troops === "number" ? force.troops : fallback.troops,
@@ -415,12 +418,27 @@ function sanitizeForce(force: SiegeForce | undefined, fallback: SiegeForce): Sie
     missiles: Boolean(force.missiles),
     magic: Boolean(force.magic),
     flyers: Boolean(force.flyers),
+    fatigue: (force.fatigue === "none" || force.fatigue === "moderate" || force.fatigue === "serious") ? force.fatigue : fallback.fatigue,
+    treasury: typeof force.treasury === "number" ? force.treasury : fallback.treasury,
+    rations: typeof force.rations === "number" ? force.rations : fallback.rations,
+    clerics: typeof force.clerics === "number" ? force.clerics : fallback.clerics,
+    ammunition: {
+      ltCatapult: sanitizeCount(ammunition.ltCatapult, fallback.ammunition.ltCatapult),
+      hvCatapult: sanitizeCount(ammunition.hvCatapult, fallback.ammunition.hvCatapult),
+      ballista: sanitizeCount(ammunition.ballista, fallback.ammunition.ballista),
+    },
     siegeEngines: {
       ltCatapult: sanitizeCount(engines.ltCatapult, fallback.siegeEngines.ltCatapult),
       hvCatapult: sanitizeCount(engines.hvCatapult, fallback.siegeEngines.hvCatapult),
       ram: sanitizeCount(engines.ram, fallback.siegeEngines.ram),
       tower: sanitizeCount(engines.tower, fallback.siegeEngines.tower),
       ballista: sanitizeCount(engines.ballista, fallback.siegeEngines.ballista),
+      timberFort: sanitizeCount(engines.timberFort, fallback.siegeEngines.timberFort),
+      mantlet: sanitizeCount(engines.mantlet, fallback.siegeEngines.mantlet),
+      ladder: sanitizeCount(engines.ladder, fallback.siegeEngines.ladder),
+      hoist: sanitizeCount(engines.hoist, fallback.siegeEngines.hoist),
+      belfry: sanitizeCount(engines.belfry, fallback.siegeEngines.belfry),
+      gallery: sanitizeCount(engines.gallery, fallback.siegeEngines.gallery),
     },
   };
 }
@@ -430,11 +448,10 @@ function sanitizeCount(value: unknown, fallback: number): number {
 }
 
 function sanitizeTactic(value: unknown, fallback: SiegeTactic): SiegeTactic {
-  return value === "attack" ||
-    value === "envelop" ||
-    value === "trap" ||
-    value === "hold" ||
-    value === "withdraw"
+  return value === "bombard" ||
+    value === "harass" ||
+    value === "assault" ||
+    value === "depart"
     ? value
     : fallback;
 }

@@ -7,19 +7,18 @@ export const QUALITY_OPTIONS = [
 ];
 
 export const TACTIC_OPTIONS: Array<{ value: SiegeTactic; label: string }> = [
-  { value: "attack", label: "Attack" },
-  { value: "envelop", label: "Envelop" },
-  { value: "trap", label: "Trap" },
-  { value: "hold", label: "Hold" },
-  { value: "withdraw", label: "Withdraw" },
+  { value: "bombard", label: "Bombard" },
+  { value: "harass", label: "Harass" },
+  { value: "assault", label: "Assault" },
+  { value: "depart", label: "Depart" },
 ];
 
-export const TACTIC_MATRIX: Record<SiegeTactic, Record<SiegeTactic, number>> = {
-  attack: { attack: 0, envelop: -20, trap: 20, hold: 0, withdraw: 0 },
-  envelop: { attack: 20, envelop: 0, trap: -20, hold: 20, withdraw: 0 },
-  trap: { attack: -20, envelop: 20, trap: 0, hold: 20, withdraw: 0 },
-  hold: { attack: 0, envelop: -20, trap: -20, hold: 0, withdraw: 0 },
-  withdraw: { attack: 0, envelop: 0, trap: 0, hold: 0, withdraw: 0 },
+// Siege tactics don't use tactical advantage matrix - each tactic has specific BR bonuses
+export const SIEGE_TACTIC_BR_BONUSES: Record<SiegeTactic, { attacker: number; defender: number }> = {
+  bombard: { attacker: 0, defender: 0 }, // Artillery only, no tactical bonuses
+  harass: { attacker: 0, defender: 0 }, // Standard combat with siege equipment
+  assault: { attacker: 5, defender: 0 }, // Attacker gets +5% bonus
+  depart: { attacker: 0, defender: 0 }, // Forces leave the siege
 };
 
 export interface CombatResultRow {
