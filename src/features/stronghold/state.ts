@@ -90,6 +90,32 @@ export function resetStrongholdState() {
 }
 
 /**
+ * Selects a project from the projects list to view/edit.
+ * This loads the project's name into the editor and sets it as the active selection.
+ */
+export function selectProject(projectId: string | null) {
+  if (!projectId) {
+    mutateStronghold((draft) => {
+      draft.activeProjectId = null;
+      draft.projectName = "New Stronghold";
+      draft.components = [];
+    });
+    return;
+  }
+  
+  const state = getStrongholdState();
+  const project = state.projects.find(p => p.id === projectId);
+  if (!project) return;
+  
+  mutateStronghold((draft) => {
+    draft.activeProjectId = projectId;
+    draft.projectName = project.name;
+    // Note: components are currently global, not per-project
+    // Future enhancement could store components per-project
+  });
+}
+
+/**
  * Exports the stronghold state in the standardized module format.
  * This format is compatible with both individual module import and full campaign import.
  */

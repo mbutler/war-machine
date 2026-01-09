@@ -358,6 +358,60 @@ function renderRetainerCard(parentId: string, retainer: Retainer): HTMLElement {
   return card;
 }
 
+/**
+ * Extract party name from character notes field.
+ * Matches "Member of X" pattern from fantasy-log imports.
+ */
+function extractPartyName(notes: string | undefined): string | null {
+  if (!notes) return null;
+  const match = notes.match(/^Member of (.+)$/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Group characters by their party affiliation.
+ */
+function groupCharactersByParty(roster: Character[]): Map<string, Character[]> {
+  const groups = new Map<string, Character[]>();
+  
+  for (const character of roster) {
+    const partyName = extractPartyName(character.notes) ?? "Adventurers";
+    const group = groups.get(partyName) ?? [];
+    group.push(character);
+    groups.set(partyName, group);
+  }
+  
+  return groups;
+}
+
+/**
+ * Create a party group header element.
+ */
+function createPartyHeader(partyName: string, memberCount: number): HTMLElement {
+  const header = document.createElement("div");
+  header.className = "party-group-header";
+  header.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+  `;
+  
+  const name = document.createElement("h3");
+  name.style.cssText = "margin: 0; font-size: 1.1rem; font-weight: 600;";
+  name.textContent = partyName;
+  
+  const count = document.createElement("span");
+  count.className = "chip";
+  count.style.cssText = "font-size: 0.75rem;";
+  count.textContent = `${memberCount} member${memberCount !== 1 ? 's' : ''}`;
+  
+  header.append(name, count);
+  return header;
+}
+
 function renderRoster(container: HTMLElement, state: PartyState) {
   container.innerHTML = "";
   if (!state.roster.length) {
@@ -368,9 +422,47 @@ function renderRoster(container: HTMLElement, state: PartyState) {
     return;
   }
 
-  state.roster.forEach((character) => {
-    container.appendChild(renderCharacterRow(character, state.preferences));
+  // Group characters by party affiliation
+  const groups = groupCharactersByParty(state.roster);
+  
+  // If only one group (all same party or no party info), render flat list
+  if (groups.size === 1) {
+    const [partyName, members] = [...groups.entries()][0];
+    // Only show header if it's a named party (not "Adventurers")
+    if (partyName !== "Adventurers") {
+      container.appendChild(createPartyHeader(partyName, members.length));
+    }
+    members.forEach((character) => {
+      container.appendChild(renderCharacterRow(character, state.preferences));
+    });
+    return;
+  }
+  
+  // Multiple groups - render with headers
+  // Sort so "Adventurers" (unaffiliated) comes last
+  const sortedGroups = [...groups.entries()].sort((a, b) => {
+    if (a[0] === "Adventurers") return 1;
+    if (b[0] === "Adventurers") return -1;
+    return a[0].localeCompare(b[0]);
   });
+  
+  for (const [partyName, members] of sortedGroups) {
+    const groupContainer = document.createElement("div");
+    groupContainer.className = "party-group";
+    groupContainer.style.cssText = "margin-bottom: 1.5rem;";
+    
+    groupContainer.appendChild(createPartyHeader(partyName, members.length));
+    
+    const memberList = document.createElement("div");
+    memberList.className = "flex flex-col gap-md";
+    
+    members.forEach((character) => {
+      memberList.appendChild(renderCharacterRow(character, state.preferences));
+    });
+    
+    groupContainer.appendChild(memberList);
+    container.appendChild(groupContainer);
+  }
 }
 
 function renderSummary(container: HTMLElement, state: PartyState) {

@@ -1,9 +1,11 @@
 import type { RouteDefinition } from "../router";
+import { showModal, closeModal } from "./modal";
 
 interface SidebarControls {
   onSelectRoute: (routeId: string) => void;
   onExport: () => void;
   onImport: (payload: string) => void;
+  onImportFromLog: (worldJson: string | null, eventsJsonl: string | null) => void;
   onClear: () => void;
 }
 
@@ -61,6 +63,167 @@ export function createSidebar(controls: SidebarControls): SidebarApi {
     importInput.click();
   });
 
+  // Import from Fantasy Log button
+  const importLogButton = document.createElement("button");
+  importLogButton.type = "button";
+  importLogButton.className = "button";
+  importLogButton.textContent = "Import from Log";
+
+  importLogButton.addEventListener("click", () => {
+    showImportLogModal(controls.onImportFromLog);
+  });
+
+  function showImportLogModal(onImport: (worldJson: string | null, eventsJsonl: string | null) => void) {
+    const content = document.createElement("div");
+    content.className = "import-log-modal";
+    content.style.cssText = "display: flex; flex-direction: column; gap: 1rem;";
+
+    // Description
+    const desc = document.createElement("p");
+    desc.style.cssText = "margin: 0; color: var(--text-secondary);";
+    desc.textContent = "Import world state and event history from the Fantasy Log simulator. Select one or both files.";
+    content.appendChild(desc);
+
+    // World.json file picker
+    const worldGroup = document.createElement("div");
+    worldGroup.style.cssText = "display: flex; flex-direction: column; gap: 0.5rem;";
+    
+    const worldLabel = document.createElement("label");
+    worldLabel.style.cssText = "font-weight: 500;";
+    worldLabel.textContent = "World State (world.json)";
+    
+    const worldInputWrapper = document.createElement("div");
+    worldInputWrapper.style.cssText = "display: flex; gap: 0.5rem; align-items: center;";
+    
+    const worldInput = document.createElement("input");
+    worldInput.type = "file";
+    worldInput.accept = ".json";
+    worldInput.style.cssText = "flex: 1;";
+    
+    const worldStatus = document.createElement("span");
+    worldStatus.style.cssText = "font-size: 0.875rem; color: var(--text-secondary);";
+    worldStatus.textContent = "No file selected";
+    
+    worldInputWrapper.append(worldInput, worldStatus);
+    worldGroup.append(worldLabel, worldInputWrapper);
+    content.appendChild(worldGroup);
+
+    // Events.jsonl file picker
+    const eventsGroup = document.createElement("div");
+    eventsGroup.style.cssText = "display: flex; flex-direction: column; gap: 0.5rem;";
+    
+    const eventsLabel = document.createElement("label");
+    eventsLabel.style.cssText = "font-weight: 500;";
+    eventsLabel.textContent = "Event Log (events.jsonl)";
+    
+    const eventsInputWrapper = document.createElement("div");
+    eventsInputWrapper.style.cssText = "display: flex; gap: 0.5rem; align-items: center;";
+    
+    const eventsInput = document.createElement("input");
+    eventsInput.type = "file";
+    eventsInput.accept = ".jsonl";
+    eventsInput.style.cssText = "flex: 1;";
+    
+    const eventsStatus = document.createElement("span");
+    eventsStatus.style.cssText = "font-size: 0.875rem; color: var(--text-secondary);";
+    eventsStatus.textContent = "No file selected";
+    
+    eventsInputWrapper.append(eventsInput, eventsStatus);
+    eventsGroup.append(eventsLabel, eventsInputWrapper);
+    content.appendChild(eventsGroup);
+
+    // Buttons
+    const buttonRow = document.createElement("div");
+    buttonRow.style.cssText = "display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;";
+    
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "button";
+    cancelBtn.textContent = "Cancel";
+    
+    const importBtn = document.createElement("button");
+    importBtn.type = "button";
+    importBtn.className = "button primary";
+    importBtn.textContent = "Import";
+    importBtn.disabled = true;
+    
+    buttonRow.append(cancelBtn, importBtn);
+    content.appendChild(buttonRow);
+
+    // Track file contents
+    let worldJson: string | null = null;
+    let eventsJsonl: string | null = null;
+
+    function updateImportButton() {
+      importBtn.disabled = worldJson === null && eventsJsonl === null;
+    }
+
+    worldInput.addEventListener("change", () => {
+      const file = worldInput.files?.[0];
+      if (!file) {
+        worldStatus.textContent = "No file selected";
+        worldJson = null;
+        updateImportButton();
+        return;
+      }
+      worldStatus.textContent = `Loading ${file.name}...`;
+      const reader = new FileReader();
+      reader.onload = () => {
+        worldJson = reader.result?.toString() ?? null;
+        worldStatus.textContent = worldJson ? `✓ ${file.name}` : "Failed to load";
+        worldStatus.style.color = worldJson ? "var(--success)" : "var(--danger)";
+        updateImportButton();
+      };
+      reader.onerror = () => {
+        worldStatus.textContent = "Failed to load";
+        worldStatus.style.color = "var(--danger)";
+        worldJson = null;
+        updateImportButton();
+      };
+      reader.readAsText(file);
+    });
+
+    eventsInput.addEventListener("change", () => {
+      const file = eventsInput.files?.[0];
+      if (!file) {
+        eventsStatus.textContent = "No file selected";
+        eventsJsonl = null;
+        updateImportButton();
+        return;
+      }
+      eventsStatus.textContent = `Loading ${file.name}...`;
+      const reader = new FileReader();
+      reader.onload = () => {
+        eventsJsonl = reader.result?.toString() ?? null;
+        eventsStatus.textContent = eventsJsonl ? `✓ ${file.name}` : "Failed to load";
+        eventsStatus.style.color = eventsJsonl ? "var(--success)" : "var(--danger)";
+        updateImportButton();
+      };
+      reader.onerror = () => {
+        eventsStatus.textContent = "Failed to load";
+        eventsStatus.style.color = "var(--danger)";
+        eventsJsonl = null;
+        updateImportButton();
+      };
+      reader.readAsText(file);
+    });
+
+    const close = showModal({
+      title: "Import from Fantasy Log",
+      content,
+    });
+
+    cancelBtn.addEventListener("click", close);
+    
+    importBtn.addEventListener("click", () => {
+      console.log("[sidebar] Import button clicked");
+      console.log("[sidebar] worldJson:", worldJson ? `${worldJson.length} chars` : "null");
+      console.log("[sidebar] eventsJsonl:", eventsJsonl ? `${eventsJsonl.length} chars` : "null");
+      close();
+      onImport(worldJson, eventsJsonl);
+    });
+  }
+
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = "button danger";
@@ -71,7 +234,7 @@ export function createSidebar(controls: SidebarControls): SidebarApi {
     }
   });
 
-  actionsPanel.append(exportButton, importButton, clearButton);
+  actionsPanel.append(exportButton, importButton, importLogButton, clearButton);
   actionsPanel.appendChild(importInput);
 
   container.append(navPanel, actionsPanel);

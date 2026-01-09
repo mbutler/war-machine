@@ -1,6 +1,6 @@
 import { createPanel } from "../../layout/panels";
 import { showNotification } from "../../layout/notifications";
-import type { StrongholdState } from "../../state/schema";
+import type { StrongholdState, StrongholdProject } from "../../state/schema";
 import {
   addComponent,
   cancelStrongholdConstruction,
@@ -14,6 +14,7 @@ import {
   startStrongholdConstruction,
   subscribeToStronghold,
   updateComponentQuantity,
+  selectProject,
 } from "./state";
 import { STRONGHOLD_COMPONENTS, getComponentById } from "./components";
 import { calculateStrongholdSummary } from "./logic";
@@ -57,9 +58,51 @@ function formatGp(value: number): string {
   return `${value.toLocaleString()} gp`;
 }
 
+function formatDate(timestamp: number | null | undefined): string {
+  if (!timestamp) return "—";
+  return new Date(timestamp).toLocaleDateString("en-US", { 
+    year: "numeric", 
+    month: "short", 
+    day: "numeric" 
+  });
+}
+
+function getStatusBadgeClass(status: string): string {
+  switch (status) {
+    case "complete": return "badge-success";
+    case "active": return "badge-warning";
+    case "planned": return "badge-info";
+    default: return "";
+  }
+}
+
 export function renderStrongholdPanel(target: HTMLElement) {
   const panel = createPanel("Stronghold", "Design fortifications and calculate construction costs");
-  panel.body.classList.add("stronghold-grid");
+  
+  // Projects list section (for viewing multiple imported strongholds)
+  const projectsSection = document.createElement("div");
+  projectsSection.className = "stronghold-projects-section";
+  
+  const projectsHeader = document.createElement("div");
+  projectsHeader.className = "stronghold-projects-header";
+  const projectsTitle = document.createElement("h3");
+  projectsTitle.className = "section-title";
+  projectsTitle.textContent = "Stronghold Projects";
+  const newProjectBtn = document.createElement("button");
+  newProjectBtn.type = "button";
+  newProjectBtn.className = "button small";
+  newProjectBtn.textContent = "+ New Project";
+  newProjectBtn.addEventListener("click", () => selectProject(null));
+  projectsHeader.append(projectsTitle, newProjectBtn);
+  
+  const projectsList = document.createElement("div");
+  projectsList.className = "stronghold-projects-list";
+  
+  projectsSection.append(projectsHeader, projectsList);
+  
+  // Two-column grid for current project
+  const gridContainer = document.createElement("div");
+  gridContainer.className = "stronghold-grid";
 
   const overviewColumn = document.createElement("div");
   overviewColumn.className = "stronghold-column";
@@ -67,7 +110,8 @@ export function renderStrongholdPanel(target: HTMLElement) {
   const builderColumn = document.createElement("div");
   builderColumn.className = "stronghold-column";
 
-  panel.body.append(overviewColumn, builderColumn);
+  gridContainer.append(overviewColumn, builderColumn);
+  panel.body.append(projectsSection, gridContainer);
   target.appendChild(panel.element);
 
   // --- Overview column ---
@@ -410,7 +454,85 @@ export function renderStrongholdPanel(target: HTMLElement) {
     });
   }
 
+  function renderProjects(state: StrongholdState) {
+    projectsList.innerHTML = "";
+    
+    if (state.projects.length === 0) {
+      const emptyMsg = document.createElement("p");
+      emptyMsg.className = "muted stronghold-projects-empty";
+      emptyMsg.textContent = "No stronghold projects yet. Import from Fantasy Log or start designing a new one.";
+      projectsList.appendChild(emptyMsg);
+      projectsSection.hidden = false;
+      return;
+    }
+    
+    projectsSection.hidden = false;
+    
+    // Group projects by status
+    const byStatus = new Map<string, StrongholdProject[]>();
+    for (const project of state.projects) {
+      const list = byStatus.get(project.status) || [];
+      list.push(project);
+      byStatus.set(project.status, list);
+    }
+    
+    // Order: active first, then planned, then complete
+    const statusOrder = ["active", "planned", "complete"];
+    
+    for (const status of statusOrder) {
+      const projects = byStatus.get(status);
+      if (!projects || projects.length === 0) continue;
+      
+      for (const project of projects) {
+        const card = document.createElement("div");
+        card.className = "stronghold-project-card";
+        if (project.id === state.activeProjectId) {
+          card.classList.add("selected");
+        }
+        card.addEventListener("click", () => selectProject(project.id));
+        
+        const header = document.createElement("div");
+        header.className = "stronghold-project-card-header";
+        
+        const name = document.createElement("span");
+        name.className = "stronghold-project-name";
+        name.textContent = project.name;
+        
+        const badge = document.createElement("span");
+        badge.className = `badge ${getStatusBadgeClass(project.status)}`;
+        badge.textContent = project.status.charAt(0).toUpperCase() + project.status.slice(1);
+        
+        header.append(name, badge);
+        
+        const meta = document.createElement("div");
+        meta.className = "stronghold-project-meta";
+        
+        const cost = document.createElement("span");
+        cost.textContent = `${project.cost.toLocaleString()} gp`;
+        
+        const days = document.createElement("span");
+        days.textContent = `${project.buildDays} days`;
+        
+        const dateInfo = document.createElement("span");
+        if (project.status === "complete" && project.completedAt) {
+          dateInfo.textContent = `Completed: ${formatDate(project.completedAt)}`;
+        } else if (project.startedAt) {
+          dateInfo.textContent = `Started: ${formatDate(project.startedAt)}`;
+        }
+        
+        meta.append(cost, days);
+        if (dateInfo.textContent) {
+          meta.appendChild(dateInfo);
+        }
+        
+        card.append(header, meta);
+        projectsList.appendChild(card);
+      }
+    }
+  }
+
   function sync(state: StrongholdState) {
+    renderProjects(state);
     syncName(state.projectName);
     syncTerrain(String(state.terrainMod));
     const summary = renderSummary(state);
