@@ -20,6 +20,7 @@ import "./features/lab";
 import "./features/siege";
 import "./features/calendar";
 import "./features/ledger";
+import "./features/faction";
 import { onCalendarEvent } from "./features/calendar/state";
 
 const root = document.getElementById("app");

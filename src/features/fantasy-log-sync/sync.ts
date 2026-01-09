@@ -16,6 +16,7 @@ import {
   transformMerchant,
   transformLedger,
   transformStronghold,
+  transformFactions,
   extractTrackers,
 } from './transforms';
 
@@ -36,6 +37,8 @@ export interface SyncOptions {
   ledger: boolean;
   /** Import stronghold projects */
   stronghold: boolean;
+  /** Import faction data */
+  faction: boolean;
 }
 
 export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
@@ -47,6 +50,7 @@ export const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   merchant: true,
   ledger: true,
   stronghold: true,
+  faction: true,
 };
 
 export interface SyncResult {
@@ -236,8 +240,19 @@ export function syncFromFantasyLog(
     }
   }
   
+  if (options.faction && world.factions.length > 0) {
+    state.faction = transformFactions(world, events);
+    summary.factions = state.faction.factions.length;
+    warnings.push({
+      type: 'info',
+      message: `Imported ${summary.factions} factions with ${state.faction.relationships.length} relationships`,
+    });
+  }
+  
   // Record additional stats
-  summary.factions = world.factions.length;
+  if (!options.faction) {
+    summary.factions = world.factions.length;
+  }
   summary.npcs = world.npcs.length;
   
   return { state, summary };
@@ -372,6 +387,42 @@ export function mergeIntoState(
       components: synced.stronghold.components.length > 0 
         ? synced.stronghold.components 
         : current.stronghold.components,
+    };
+  }
+  
+  if (synced.faction) {
+    // Merge factions - add new, update existing
+    const existingIds = new Set(current.faction.factions.map(f => f.id));
+    const newFactions = synced.faction.factions.filter(f => !existingIds.has(f.id));
+    
+    // Update existing factions with new data
+    const updatedFactions = current.faction.factions.map(existing => {
+      const updated = synced.faction!.factions.find(f => f.id === existing.id);
+      return updated ? { ...existing, ...updated } : existing;
+    });
+    
+    // Merge relationships
+    const existingRelKeys = new Set(
+      current.faction.relationships.map(r => [r.factionA, r.factionB].sort().join('-'))
+    );
+    const newRelationships = synced.faction.relationships.filter(
+      r => !existingRelKeys.has([r.factionA, r.factionB].sort().join('-'))
+    );
+    
+    // Merge operations
+    const existingOpIds = new Set(current.faction.operations.map(o => o.id));
+    const newOperations = synced.faction.operations.filter(o => !existingOpIds.has(o.id));
+    
+    // Merge log entries
+    const existingLogIds = new Set(current.faction.log.map(l => l.id));
+    const newLogEntries = synced.faction.log.filter(l => !existingLogIds.has(l.id));
+    
+    merged.faction = {
+      factions: [...updatedFactions, ...newFactions],
+      relationships: [...current.faction.relationships, ...newRelationships],
+      operations: [...current.faction.operations, ...newOperations],
+      log: [...newLogEntries, ...current.faction.log].slice(0, 200),
+      selectedFactionId: synced.faction.selectedFactionId ?? current.faction.selectedFactionId,
     };
   }
   

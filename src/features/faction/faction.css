@@ -1,0 +1,612 @@
+/* ============================================================================
+   Faction Module Styles
+   ============================================================================ */
+
+.faction-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+}
+
+.faction-container {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================================
+   Faction List Column
+   ============================================================================ */
+
+.faction-list-column {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.faction-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.faction-list-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.btn-add-faction {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-1);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-add-faction:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.faction-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.faction-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.faction-empty p:first-child {
+  margin-bottom: 0.5rem;
+}
+
+/* ============================================================================
+   Faction Groups
+   ============================================================================ */
+
+.faction-group {
+  margin-bottom: 0.75rem;
+}
+
+.faction-group-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+  padding: 0.5rem 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.5rem;
+}
+
+/* ============================================================================
+   Faction Cards
+   ============================================================================ */
+
+.faction-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.faction-card:hover {
+  border-color: var(--accent);
+  background: var(--surface-3);
+}
+
+.faction-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.faction-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.faction-icon {
+  font-size: 1.25rem;
+}
+
+.faction-icon.large {
+  font-size: 2rem;
+}
+
+.faction-icon.small {
+  font-size: 0.9rem;
+}
+
+.faction-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.faction-card-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.faction-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  color: var(--text-2);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  font-weight: 600;
+}
+
+.stat-value.positive {
+  color: #22c55e;
+}
+
+.stat-value.negative {
+  color: #ef4444;
+}
+
+.faction-power-bar {
+  position: relative;
+  height: 16px;
+  background: var(--surface-1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.faction-power-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+  border-radius: 8px;
+  transition: width 0.3s ease;
+}
+
+.faction-power-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================================
+   Detail Column
+   ============================================================================ */
+
+.faction-detail-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.faction-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  background: var(--surface-1);
+  border-radius: 8px;
+  border: 2px dashed var(--border);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.faction-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: var(--surface-1);
+  border-radius: 8px;
+}
+
+.faction-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.faction-name-input {
+  font-size: 1.25rem;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  color: var(--text-1);
+  width: 300px;
+}
+
+.faction-name-input:hover,
+.faction-name-input:focus {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.btn-delete-faction {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.15s ease;
+}
+
+.btn-delete-faction:hover {
+  opacity: 1;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================================================
+   Stats Grid
+   ============================================================================ */
+
+.faction-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.stat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stat-row label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.stat-row input,
+.stat-row select {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 0.875rem;
+}
+
+.stat-row input:focus,
+.stat-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ============================================================================
+   Relationships Table
+   ============================================================================ */
+
+.faction-rel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.faction-rel-table th,
+.faction-rel-table td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.faction-rel-table th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+}
+
+.rel-status-select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rel-reason-input {
+  width: 100%;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.8rem;
+  color: var(--text-1);
+}
+
+.rel-reason-input:hover,
+.rel-reason-input:focus {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.faction-rel-summary {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.faction-rel-summary .allies {
+  color: #22c55e;
+}
+
+.faction-rel-summary .enemies {
+  color: #ef4444;
+}
+
+/* ============================================================================
+   Territory & Attitudes
+   ============================================================================ */
+
+.faction-territory-list {
+  margin-bottom: 1rem;
+}
+
+.territory-list {
+  margin: 0.5rem 0 0 1.5rem;
+  padding: 0;
+}
+
+.territory-list li {
+  margin-bottom: 0.25rem;
+  color: var(--text-1);
+}
+
+.faction-attitudes {
+  margin-top: 1rem;
+}
+
+.attitude-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.attitude-entry {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-2);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.attitude-target {
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attitude-value {
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+/* ============================================================================
+   Operations
+   ============================================================================ */
+
+.faction-operations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.operation-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.operation-card.active {
+  border-left: 3px solid #f59e0b;
+}
+
+.operation-card.complete {
+  border-left: 3px solid #22c55e;
+  opacity: 0.7;
+}
+
+.operation-card.failed {
+  border-left: 3px solid #ef4444;
+  opacity: 0.7;
+}
+
+.operation-card.cancelled {
+  border-left: 3px solid #94a3b8;
+  opacity: 0.5;
+}
+
+.operation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.operation-type {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.operation-status {
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+.operation-target {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  margin-bottom: 0.5rem;
+}
+
+.operation-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+.operation-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.operation-actions button {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-3);
+  color: var(--text-1);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.operation-actions button:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* ============================================================================
+   Notes
+   ============================================================================ */
+
+.faction-notes {
+  width: 100%;
+  min-height: 100px;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+}
+
+.faction-notes:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ============================================================================
+   Data Actions
+   ============================================================================ */
+
+.faction-data-actions {
+  flex-shrink: 0;
+}
+
+.faction-data-actions .button-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.faction-data-actions button,
+.faction-data-actions .file-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.faction-data-actions button:hover,
+.faction-data-actions .file-button:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 900px) {
+  .faction-container {
+    grid-template-columns: 1fr;
+  }
+
+  .faction-list-column {
+    max-height: 300px;
+  }
+
+  .faction-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .attitude-grid {
+    grid-template-columns: 1fr;
+  }
+}

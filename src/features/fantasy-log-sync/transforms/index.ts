@@ -12,4 +12,5 @@ export { transformSiege, getArmySummary } from './siege';
 export { transformMerchant, getCaravanSummary } from './merchant';
 export { transformLedger, extractTransactions, getGoldSummary } from './ledger';
 export { transformStronghold, getStrongholdSummary } from './stronghold';
+export { transformFactions } from './faction';
 

@@ -788,6 +788,80 @@ export interface LedgerState {
   recurringExpenses: LedgerRecurringExpense[];  // Scheduled payments (wages, etc.)
 }
 
+// ============================================================================
+// FACTION (Political Powers)
+// ============================================================================
+
+export type FactionFocus = 'trade' | 'martial' | 'pious' | 'arcane';
+
+export type FactionOperationType =
+  | 'raid'           // Quick strike for plunder
+  | 'patrol'         // Defensive presence
+  | 'conquest'       // Taking territory
+  | 'siege'          // Prolonged military action
+  | 'defense'        // Reinforcing a location
+  | 'espionage'      // Gathering intelligence
+  | 'sabotage'       // Disrupting enemy operations
+  | 'assassination'  // Targeting key figures
+  | 'diplomacy'      // Negotiating alliances
+  | 'trade_mission'  // Economic venture
+  | 'recruitment'    // Gathering forces
+  | 'propaganda';    // Influencing public opinion
+
+export interface FactionOperation {
+  id: string;
+  type: FactionOperationType;
+  target: string;           // Settlement, faction, or location
+  startedAt: number;        // Timestamp
+  completesAt?: number;     // Estimated completion
+  participants: string[];   // NPC/unit names involved
+  successChance: number;    // 0-100
+  resources: number;        // Gold committed
+  secret: boolean;          // Covert operation?
+  status: 'active' | 'complete' | 'failed' | 'cancelled';
+  outcome?: string;         // Result description
+}
+
+export interface Faction {
+  id: string;
+  name: string;
+  focus: FactionFocus;
+  wealth: number;
+  power: number;            // 0-100, overall strength
+  morale: number;           // -10 to +10
+  territory: string[];      // Settlement/hex IDs they control
+  attitude: Record<string, number>;  // Entity -> -3 to +3
+  enemies: string[];        // Faction IDs at war with
+  allies: string[];         // Faction IDs allied with
+  resourceNeeds: string[];  // Goods they're seeking
+  lastNoted?: string;       // Last known location
+  notes?: string;           // User notes
+}
+
+export interface FactionRelationship {
+  factionA: string;
+  factionB: string;
+  status: 'allied' | 'friendly' | 'neutral' | 'hostile' | 'war';
+  reason?: string;
+}
+
+export interface FactionLogEntry {
+  id: string;
+  timestamp: number;
+  factionId: string;
+  summary: string;
+  details?: string;
+  location?: string;
+}
+
+export interface FactionState {
+  factions: Faction[];
+  relationships: FactionRelationship[];
+  operations: FactionOperation[];
+  log: FactionLogEntry[];
+  selectedFactionId: string | null;
+}
+
 export interface WarMachineState {
   meta: {
     version: string;
@@ -804,6 +878,7 @@ export interface WarMachineState {
   lab: LabState;
   dungeon: DungeonState;
   ledger: LedgerState;
+  faction: FactionState;
 }
 
 const STRONGHOLD_DEFAULT_STATE: StrongholdState = {
@@ -993,6 +1068,18 @@ export function createDefaultLedgerState(): LedgerState {
   return JSON.parse(JSON.stringify(LEDGER_DEFAULT_STATE));
 }
 
+const FACTION_DEFAULT_STATE: FactionState = {
+  factions: [],
+  relationships: [],
+  operations: [],
+  log: [],
+  selectedFactionId: null,
+};
+
+export function createDefaultFactionState(): FactionState {
+  return JSON.parse(JSON.stringify(FACTION_DEFAULT_STATE));
+}
+
 export const DEFAULT_STATE: WarMachineState = {
   meta: {
     version: STATE_VERSION,
@@ -1107,5 +1194,6 @@ export const DEFAULT_STATE: WarMachineState = {
     log: [],
   },
   ledger: createDefaultLedgerState(),
+  faction: createDefaultFactionState(),
 };
 
